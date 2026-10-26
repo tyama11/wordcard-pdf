@@ -1,4 +1,24 @@
-// Pure TeX delimiter splitter (no DOM, no MathJax). See docs/SPEC.md "Text / LaTeX".
+// Pure TeX delimiter splitter and input normalizer (no DOM, no MathJax). See docs/SPEC.md "Text / LaTeX".
+
+const YEN_RE = /[\u00A5\uFFE5](?=[a-zA-Z{}()[\]$,])/g;
+
+/**
+ * Replace '¥' (U+00A5) and '￥' (U+FFE5) with '\' ONLY when immediately followed by
+ * an ASCII letter or one of { } ( ) [ ] $ , (e.g. TeX commands like `\frac`, delimiters `\(`,
+ * `\[`, escaped braces/dollars, or `\,`).
+ * Currency amounts like '¥100' and '￥500' stay unchanged.
+ * @param {string} text
+ * @returns {{text: string, count: number}}
+ */
+export function normalizeInput(text) {
+  const s = String(text ?? '');
+  let count = 0;
+  const normalized = s.replace(YEN_RE, () => {
+    count++;
+    return '\\';
+  });
+  return { text: normalized, count };
+}
 
 /**
  * Find the index of the closing `$` (or `$$`) for math starting at `start`.
@@ -69,22 +89,25 @@ function findGroupEnd(s, open) {
 }
 
 /**
- * Split cell text into plain-text and TeX parts.
+ * Split cell text into plain-text, TeX math parts, and syntax error parts.
  *
  * Rules (docs/SPEC.md):
  * - `$...$` and `\(...\)` are inline math; `$$...$$` and `\[...\]` are display math.
  * - A bare `\ce{...}` (nested braces allowed) outside math is inline math; its value
  *   is the whole `\ce{...}` source.
  * - `\$` outside math is a literal dollar sign.
- * - An opening delimiter without a matching close (or with empty content) is literal text.
+ * - Unmatched math delimiters (`$`, `$$`, `\(`, `\[`) emit an error part with the
+ *   delimiter and the rest of the cell.
+ * - Bare `\ce{` without a matching closing brace emits an error part from `\ce{` to the end of the cell.
+ * - Text before an unclosed delimiter stays a normal text part.
  *
  * Adjacent text parts are merged; empty text parts are omitted.
  * @param {string} text
- * @returns {{type: 'text'|'inline'|'display', value: string}[]}
+ * @returns {({type: 'text'|'inline'|'display', value: string} | {type: 'error', value: string, message: string})[]}
  */
 export function splitTex(text) {
   const s = String(text ?? '');
-  /** @type {{type: 'text'|'inline'|'display', value: string}[]} */
+  /** @type {({type: 'text'|'inline'|'display', value: string} | {type: 'error', value: string, message: string})[]} */
   const parts = [];
   let buf = '';
   const flush = () => {
@@ -109,13 +132,20 @@ export function splitTex(text) {
       if (n === '(' || n === '[') {
         const closeChar = n === '(' ? ')' : ']';
         const end = findBackslashClose(s, i + 2, closeChar);
-        if (end > i + 2) {
+        if (end !== -1) {
           pushMath(n === '(' ? 'inline' : 'display', s.slice(i + 2, end));
           i = end + 2;
           continue;
         }
+        flush();
+        parts.push({
+          type: 'error',
+          value: s.slice(i),
+          message: n === '(' ? 'Unclosed math delimiter \\(' : 'Unclosed math delimiter \\['
+        });
+        return parts;
       }
-      const ce = /^\\ce\s*\{/.exec(s.slice(i, i + 64));
+      const ce = /^\\ce\s*\{/.exec(s.slice(i));
       if (ce) {
         const end = findGroupEnd(s, i + ce[0].length - 1);
         if (end !== -1) {
@@ -123,6 +153,13 @@ export function splitTex(text) {
           i = end;
           continue;
         }
+        flush();
+        parts.push({
+          type: 'error',
+          value: s.slice(i),
+          message: 'Missing close brace'
+        });
+        return parts;
       }
       buf += c;
       i++;
@@ -132,14 +169,18 @@ export function splitTex(text) {
       const display = s[i + 1] === '$';
       const open = display ? 2 : 1;
       const end = findDollarClose(s, i + open, display ? '$$' : '$');
-      if (end > i + open) {
+      if (end !== -1) {
         pushMath(display ? 'display' : 'inline', s.slice(i + open, end));
         i = end + open;
         continue;
       }
-      buf += s.slice(i, i + open);
-      i += open;
-      continue;
+      flush();
+      parts.push({
+        type: 'error',
+        value: s.slice(i),
+        message: display ? 'Unclosed math delimiter $$' : 'Unclosed math delimiter $'
+      });
+      return parts;
     }
     buf += c;
     i++;
