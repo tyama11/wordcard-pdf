@@ -23,11 +23,15 @@ test.describe('Wordcards PDF App E2E', () => {
     // TeX warning visible (row 3, back side: \frac{1})
     const warning = page.locator('.alert-warning');
     await expect(warning).toBeVisible();
-    await expect(warning).toContainText('3行目・裏面: \\frac{1}');
+    await expect(warning).toContainText('3行目・裏面：\\frac{1}');
 
-    // 2. Click generate, capture download, verify file name pattern and PDF pages
+    // 2. Click generate, confirm dialog on TeX errors, capture download, verify file name pattern and PDF pages
     const downloadPromise = page.waitForEvent('download');
     await page.click('#generate-btn');
+    const proceedBtn = page.locator('#dialog-proceed-btn');
+    if (await proceedBtn.isVisible()) {
+      await proceedBtn.click();
+    }
     const download = await downloadPromise;
 
     const filename = download.suggestedFilename();
