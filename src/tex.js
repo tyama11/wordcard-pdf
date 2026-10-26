@@ -140,6 +140,35 @@ function getMathJax() {
 }
 
 /**
+ * Find TeX syntax errors in cell text.
+ * Reuses the lazily created MathJax document.
+ * @param {string} text
+ * @returns {string[]} Array of error messages for each invalid math part
+ */
+export function findTexErrors(text) {
+  const errors = [];
+  const parts = splitTex(text);
+  const { html } = getMathJax();
+  const mathParts = parts.filter((p) => p.type !== 'text');
+  if (mathParts.length > 0) {
+    for (const p of mathParts) {
+      try {
+        html.convert(p.value, { display: p.type === 'display', em: 16, ex: 8 });
+      } catch (err) {
+        errors.push(err?.message || String(err));
+      }
+    }
+  } else if (text && typeof text === 'string' && text.includes('\\')) {
+    try {
+      html.convert(text, { display: false, em: 16, ex: 8 });
+    } catch (err) {
+      errors.push(err?.message || String(err));
+    }
+  }
+  return errors;
+}
+
+/**
  * Escape text for safe insertion into HTML.
  * @param {string} s
  * @returns {string}
@@ -299,10 +328,10 @@ export function getLastFitInfo() {
  * The image is exactly round(91/25.4*dpi) x round(55/25.4*dpi) px (1075 x 650 at 300 dpi).
  * After it resolves, getLastFitInfo() describes the chosen font size.
  * @param {string} text cell text (plain text with embedded TeX)
- * @param {{dpi?: number}} [opts]
- * @returns {Promise<string>} PNG data URL
+ * @param {{dpi?: number, format?: 'png'|'jpeg'}} [opts]
+ * @returns {Promise<string>} PNG or JPEG data URL
  */
-export async function renderFace(text, { dpi = 300 } = {}) {
+export async function renderFace(text, { dpi = 300, format = 'png' } = {}) {
   const outW = Math.round((CARD_W_MM / MM_PER_IN) * dpi);
   const outH = Math.round((CARD_H_MM / MM_PER_IN) * dpi);
   const scale = dpi / CSS_DPI;
@@ -330,6 +359,9 @@ export async function renderFace(text, { dpi = 300 } = {}) {
       ctx.drawImage(src, 0, 0); // crop / pad by at most a couple of px, no resampling
     } else {
       ctx.drawImage(src, 0, 0, outW, outH);
+    }
+    if (format === 'jpeg' || format === 'jpg') {
+      return out.toDataURL('image/jpeg', 0.92);
     }
     return out.toDataURL('image/png');
   } finally {

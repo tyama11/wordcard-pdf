@@ -140,7 +140,7 @@ export async function buildCardsPdf(cards, renderFace, opts = {}) {
         if (dataUrl) {
           const rect = frontRect(slot);
           const format = getImageFormat(dataUrl);
-          doc.addImage(dataUrl, format, rect.x, rect.y, rect.w, rect.h);
+          doc.addImage(dataUrl, format, rect.x, rect.y, rect.w, rect.h, undefined, 'FAST');
         }
       }
       stepProgress();
@@ -156,7 +156,7 @@ export async function buildCardsPdf(cards, renderFace, opts = {}) {
         if (dataUrl) {
           const rect = backRect(slot, layoutOpts);
           const format = getImageFormat(dataUrl);
-          doc.addImage(dataUrl, format, rect.x, rect.y, rect.w, rect.h);
+          doc.addImage(dataUrl, format, rect.x, rect.y, rect.w, rect.h, undefined, 'FAST');
         }
       }
       stepProgress();

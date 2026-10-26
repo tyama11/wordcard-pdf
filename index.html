@@ -12,7 +12,165 @@
   <meta property="og:url" content="https://tyama11.github.io/wordcard-pdf/">
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app" class="container">
+    <header class="app-header">
+      <h1 class="app-title">単語カードPDFメーカー</h1>
+      <p class="app-description">CSVファイルから両面印刷用の単語カードPDFを生成するWebツールです。</p>
+      <div class="privacy-badge">
+        <svg class="privacy-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+        </svg>
+        <span>CSVはブラウザ内だけで処理され、どこにも送信されません</span>
+      </div>
+    </header>
+
+    <main>
+      <!-- Step 1 -->
+      <section class="step-section" id="step-1">
+        <h2>Step 1: CSVを選ぶ</h2>
+        <div id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="CSVファイルを選択またはドロップ">
+          <input type="file" id="file-input" accept=".csv,.tsv,.txt" class="visually-hidden">
+          <p class="drop-zone-text">ここにファイルをドラッグ＆ドロップ、または</p>
+          <button type="button" id="browse-btn" class="btn secondary-btn">ファイルを選択</button>
+        </div>
+
+        <div id="summary-container" class="summary-box" hidden>
+          <p id="card-summary"></p>
+        </div>
+
+        <div id="alert-container" class="alert-container" role="region" aria-live="polite"></div>
+
+        <div id="large-file-warning" class="alert-box" hidden></div>
+
+        <div class="sample-link-wrapper">
+          <a href="./sample.csv" download>サンプルCSVをダウンロード</a>
+        </div>
+
+        <details class="help-details">
+          <summary>CSVの形式・書き方について</summary>
+          <div class="details-content">
+            <ul>
+              <li>1列目を<strong>表面（表）</strong>、2列目を<strong>裏面（裏）</strong>として読み込みます（3列目以降は無視されます）。</li>
+              <li>1行目のヘッダーは自動検出されます（<code>表|裏</code>、<code>front|back</code>、<code>問題|答え</code> など）。</li>
+              <li>文字コードは <strong>UTF-8</strong>（BOM付き/なし）および <strong>Shift_JIS</strong> に対応しています（自動判定）。</li>
+              <li>セル内に改行やカンマを含む場合は、RFC 4180 規格に従いダブルクォートで囲んでください。</li>
+            </ul>
+          </div>
+        </details>
+      </section>
+
+      <!-- Step 2 -->
+      <section class="step-section" id="step-2">
+        <h2>Step 2: 印刷設定</h2>
+        <div class="form-group">
+          <label for="flip-select">とじ方</label>
+          <select id="flip-select">
+            <option value="long">長辺とじ（推奨）</option>
+            <option value="short">短辺とじ</option>
+          </select>
+        </div>
+
+        <fieldset class="offset-fieldset">
+          <legend>裏面のずれ補正</legend>
+          <div class="offset-inputs">
+            <div class="form-group">
+              <label for="offset-x">裏面オフセット X</label>
+              <div class="input-with-unit">
+                <input type="number" id="offset-x" step="0.1" min="-5.0" max="5.0" value="0.0">
+                <span>mm</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="offset-y">裏面オフセット Y</label>
+              <div class="input-with-unit">
+                <input type="number" id="offset-y" step="0.1" min="-5.0" max="5.0" value="0.0">
+                <span>mm</span>
+              </div>
+            </div>
+          </div>
+          <p class="help-text">裏面を見たとき、+X は裏面を右へ、+Y は裏面を下へ移動します（-X は左へ、-Y は上へ移動）。</p>
+        </fieldset>
+
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="crop-marks" checked>
+            <span>トンボ（裁断マーク）を印刷する</span>
+          </label>
+        </div>
+
+        <div class="calibration-block">
+          <button type="button" id="calibration-btn" class="btn secondary-btn">位置合わせシートをダウンロード</button>
+          <p class="help-text">両面印刷した位置合わせシートを光に透かし、表の十字が裏の目盛りのどこに見えるかを読み取ります。読み取った値を、今の補正値に足して入力してください（裏面を見て +X＝右、+Y＝下）。</p>
+        </div>
+      </section>
+
+      <!-- Step 3 -->
+      <section class="step-section" id="step-3">
+        <h2>Step 3: PDFを作る</h2>
+        <button type="button" id="generate-btn" class="btn primary-btn" disabled>PDFを作成してダウンロード</button>
+
+        <div id="progress-container" class="progress-container" hidden>
+          <progress id="progress-bar" value="0" max="100"></progress>
+          <p id="progress-text" class="progress-text">0 / 0 面を作成中</p>
+        </div>
+
+        <div id="print-notice" class="notice-box" hidden>
+          <h3>印刷時の注意</h3>
+          <ul>
+            <li><strong>用紙サイズ</strong>: A4</li>
+            <li><strong>倍率設定</strong>: 「実際のサイズ」または「100%」を選択してください（「ページに合わせる / 用紙に合わせる」は必ずOFF）。</li>
+            <li><strong>両面印刷</strong>: <span id="duplex-notice-text">「両面印刷・長辺とじ」に設定してください。</span></li>
+            <li><strong>フチなし印刷</strong>: 「フチなし印刷」はOFFにしてください（拡大されて位置がずれます）。</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Cheat sheet -->
+      <details class="cheatsheet-details">
+        <summary>数式・化学式の書き方（TeX・mhchem記法チートシート）</summary>
+        <div class="details-content">
+          <p>セル内のテキストに以下の記法を埋め込むことで、数式や化学式をきれいに表示できます。</p>
+          <ul>
+            <li>インライン数式: <code>$式$</code> または <code>\(式\)</code></li>
+            <li>独立行数式（センタリング）: <code>$$式$$</code> または <code>\[式\]</code></li>
+            <li>化学式・反応式: <code>\ce{式}</code>（数式の外でもそのまま記述できます）</li>
+            <li>通常のドル記号（半角）: <code>\$</code></li>
+          </ul>
+          <table class="cheat-table">
+            <thead>
+              <tr>
+                <th>書き方（例）</th>
+                <th>説明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>$x^2$</code></td><td>上付き添字・累乗</td></tr>
+              <tr><td><code>$\frac{a}{b}$</code></td><td>分数</td></tr>
+              <tr><td><code>$\sqrt{x}$</code></td><td>平方根（ルート）</td></tr>
+              <tr><td><code>$$...$$</code></td><td>独立行数式（センタリング表示）</td></tr>
+              <tr><td><code>\ce{H2O}</code></td><td>化学式（水）</td></tr>
+              <tr><td><code>\ce{2H2 + O2 -> 2H2O}</code></td><td>化学反応式</td></tr>
+              <tr><td><code>\ce{Fe^{3+}}</code></td><td>イオン電荷</td></tr>
+              <tr><td><code>\ce{A &lt;=&gt; B}</code></td><td>平衡反応の矢印</td></tr>
+              <tr><td><code>\$</code></td><td>半角ドル記号の表示</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </main>
+
+    <footer class="app-footer">
+      <div class="footer-links">
+        <a href="https://github.com/tyama11/wordcard-pdf" target="_blank" rel="noopener noreferrer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          <span>GitHub (v1.0.0)</span>
+        </a>
+      </div>
+      <p class="footer-copy">MIT License &copy; 2026 tyama11</p>
+    </footer>
+  </div>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>
