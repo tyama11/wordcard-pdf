@@ -1,0 +1,7 @@
+front,back
+"$\frac{1}{2}$","quoted, comma"
+"\ce{H2SO4}","multi
+line"
+"one column only"
+
+"extra","columns","ignored"
