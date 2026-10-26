@@ -136,6 +136,7 @@ for (const colorScheme of ['light', 'dark']) {
 
       for (const selector of TARGET_SELECTORS) {
         const results = await getElementsContrast(page, selector);
+        expect(results.length, `${selector} not found`).toBeGreaterThan(0);
         for (const item of results) {
           expect(
             item.ratio,
@@ -191,6 +192,7 @@ for (const colorScheme of ['light', 'dark']) {
 
       for (const selector of dialogSelectors) {
         const results = await getElementsContrast(page, selector);
+        expect(results.length, `${selector} not found`).toBeGreaterThan(0);
         for (const item of results) {
           expect(
             item.ratio,
