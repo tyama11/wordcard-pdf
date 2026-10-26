@@ -25,5 +25,8 @@
     "papaparse": "^5.7.0",
     "pdfjs-dist": "^6.4.299"
   },
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  }
 }
