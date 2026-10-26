@@ -9,7 +9,7 @@ import { RegisterHTMLHandler } from '@mathjax/src/js/handlers/html.js';
 import '@mathjax/src/js/input/tex/base/BaseConfiguration.js';
 import '@mathjax/src/js/input/tex/ams/AmsConfiguration.js';
 import '@mathjax/src/js/input/tex/newcommand/NewcommandConfiguration.js';
-import '@mathjax/src/js/input/tex/noundefined/NoUndefinedConfiguration.js';
+import { NoUndefinedConfiguration } from '@mathjax/src/js/input/tex/noundefined/NoUndefinedConfiguration.js';
 import '@mathjax/src/js/input/tex/mhchem/MhchemConfiguration.js';
 import { MathJaxNewcmFont } from '@mathjax/mathjax-newcm-font/js/svg.js';
 // MathJax v4 fonts split rarely used glyphs into "dynamic" files that are normally fetched at
@@ -54,6 +54,23 @@ const FONT_FAMILY = '"Hiragino Sans","Noto Sans JP","Yu Gothic","Meiryo",sans-se
 const ERROR_COLOR = '#c00';
 const STYLE_ID = 'wordcard-tex-styles';
 
+// Intercept undefined control sequence creation to mark the node with its name.
+if (NoUndefinedConfiguration && NoUndefinedConfiguration.fallback) {
+  NoUndefinedConfiguration.fallback.macro = function (parser, name) {
+    const textNode = parser.create('text', '\\' + name);
+    const options = parser.options.noundefined;
+    const def = {};
+    for (const id of ['color', 'background', 'size']) {
+      if (options[id]) {
+        def['math' + id] = options[id];
+      }
+    }
+    const node = parser.create('node', 'mtext', [], def, textNode);
+    node.setProperty('noundefined', '\\' + name);
+    parser.Push(node);
+  };
+}
+
 /**
  * mhchem emits Private Use Area code points whose glyphs live in the separate
  * `mathjax-mhchem-font-extension` package (not a dependency). Map them to standard
@@ -94,6 +111,33 @@ function remapMhchemChars({ data }) {
   });
 }
 
+/** @type {string[]} List of undefined control sequences found during current TeX compilation. */
+let currentUndefinedCS = [];
+
+/**
+ * TeX post-filter collecting undefined control sequences from the parsed MathItem root.
+ * @param {{data: {root: any}}} arg
+ */
+function collectUndefinedCS({ data }) {
+  data.root.walkTree((node) => {
+    let name = node.getProperty ? node.getProperty('noundefined') : null;
+    if (!name && node.isKind && node.isKind('merror')) {
+      const err = node.attributes?.get('data-mjx-error');
+      if (err) {
+        const m = /^Undefined control sequence (\S+)/.exec(err);
+        if (m) name = m[1];
+      }
+    }
+    if (!name && node.isKind && node.isKind('mtext') && node.attributes?.get('mathcolor') === 'red') {
+      const t = node.childNodes?.[0]?.getText ? node.childNodes[0].getText() : '';
+      if (t.startsWith('\\')) name = t;
+    }
+    if (name) {
+      currentUndefinedCS.push(name);
+    }
+  });
+}
+
 /** @type {{html: any, adaptor: any} | null} */
 let mj = null;
 
@@ -116,6 +160,7 @@ function getMathJax() {
     },
   });
   tex.postFilters.add(remapMhchemChars, -1);
+  tex.postFilters.add(collectUndefinedCS, 0);
   // Text in math (\text, CJK identifiers, glyphs missing from the math font) uses the card font.
   const svg = new SVG({
     fontData: MathJaxNewcmFont,
@@ -140,29 +185,93 @@ function getMathJax() {
 }
 
 /**
+ * Translate a TeX error message to Japanese for user guidance.
+ * @param {string} message English error message
+ * @returns {string} Japanese explanation
+ */
+export function explainTexError(message) {
+  const msg = String(message ?? '').trim();
+
+  // Missing argument for \X -> 「\X の { } の中身が足りません」
+  const missingArg = /^Missing argument for (\\\S+|\S+?)(?:\.|$)/.exec(msg);
+  if (missingArg) {
+    return `${missingArg[1]} の { } の中身が足りません`;
+  }
+
+  // Missing close brace -> 「閉じかっこ } が足りません」
+  if (/^Missing close brace(?:\.|$)/.test(msg)) {
+    return '閉じかっこ } が足りません';
+  }
+
+  // Extra close brace / Extra open brace or missing close brace -> 「かっこ { } の数が合っていません」
+  if (/^Extra (?:close brace|open brace or missing close brace)(?:\.|$)/.test(msg)) {
+    return 'かっこ { } の数が合っていません';
+  }
+
+  // Undefined control sequence \X -> 「\X という命令はありません（つづりを確認してください）」
+  const undef = /^Undefined control sequence (\\\S+|\S+?)(?:\.|$)/.exec(msg);
+  if (undef) {
+    return `${undef[1]} という命令はありません（つづりを確認してください）`;
+  }
+
+  // Unclosed math delimiter $ (also $$ \( \[) -> 「$ が閉じられていません（数式は $ と $ ではさみます）」 adapted per delimiter
+  const unclosed = /^Unclosed math delimiter (\$\$|\$|\\\(|\\\[)/.exec(msg);
+  if (unclosed) {
+    const delim = unclosed[1];
+    let open = delim;
+    let close = delim;
+    if (delim === '\\(') close = '\\)';
+    else if (delim === '\\[') close = '\\]';
+    return `${delim} が閉じられていません（数式は ${open} と ${close} ではさみます）`;
+  }
+
+  // Double exponent / Double subscript -> 「^ や _ が続けて使われています。{ } でまとめてください」
+  if (/^Double (?:exponent|subscript)/.test(msg)) {
+    return '^ や _ が続けて使われています。{ } でまとめてください';
+  }
+
+  // Fallback -> 「数式の書き方に誤りがあります（<original>）」
+  return `数式の書き方に誤りがあります（${msg}）`;
+}
+
+/**
  * Find TeX syntax errors in cell text.
  * Reuses the lazily created MathJax document.
  * @param {string} text
- * @returns {string[]} Array of error messages for each invalid math part
+ * @returns {{source: string, message: string, ja: string}[]} Array of error details for each invalid math part
  */
 export function findTexErrors(text) {
   const errors = [];
   const parts = splitTex(text);
   const { html } = getMathJax();
-  const mathParts = parts.filter((p) => p.type !== 'text');
-  if (mathParts.length > 0) {
-    for (const p of mathParts) {
+
+  for (const p of parts) {
+    if (p.type === 'error') {
+      errors.push({
+        source: p.value,
+        message: p.message,
+        ja: explainTexError(p.message),
+      });
+    } else if (p.type === 'inline' || p.type === 'display') {
+      currentUndefinedCS = [];
       try {
         html.convert(p.value, { display: p.type === 'display', em: 16, ex: 8 });
+        for (const cs of currentUndefinedCS) {
+          const msg = `Undefined control sequence ${cs}`;
+          errors.push({
+            source: p.value,
+            message: msg,
+            ja: explainTexError(msg),
+          });
+        }
       } catch (err) {
-        errors.push(err?.message || String(err));
+        const msg = err?.message || String(err);
+        errors.push({
+          source: p.value,
+          message: msg,
+          ja: explainTexError(msg),
+        });
       }
-    }
-  } else if (text && typeof text === 'string' && text.includes('\\')) {
-    try {
-      html.convert(text, { display: false, em: 16, ex: 8 });
-    } catch (err) {
-      errors.push(err?.message || String(err));
     }
   }
   return errors;
@@ -217,17 +326,23 @@ function mathToHtml(tex, display) {
  */
 export function toHtml(text) {
   return splitTex(text)
-    .map((p) => (p.type === 'text' ? textToHtml(p.value) : mathToHtml(p.value, p.type === 'display')))
+    .map((p) => {
+      if (p.type === 'text') return textToHtml(p.value);
+      if (p.type === 'error') return `<span style="color:${ERROR_COLOR}">${textToHtml(p.value)}</span>`;
+      return mathToHtml(p.value, p.type === 'display');
+    })
     .join('');
 }
 
 /**
  * Build the off-screen card face element (not yet attached to the document).
- * Structure: card (91x55 mm, 4 mm padding) > box (content box, overflow checked) > content.
+ * Structure: card (91x55 mm, 4 mm padding) > box (content box, overflow checked) > content
+ * and optional footer (.wordcard-error-note) when errors exist.
  * @param {string} text
- * @returns {{card: HTMLDivElement, box: HTMLDivElement}}
+ * @param {{errorNote?: boolean}} [opts]
+ * @returns {{card: HTMLDivElement, box: HTMLDivElement, note: HTMLDivElement | null}}
  */
-function buildFace(text) {
+export function buildFace(text, { errorNote = true } = {}) {
   const card = document.createElement('div');
   card.className = 'wordcard-face';
   Object.assign(card.style, {
@@ -245,11 +360,14 @@ function buildFace(text) {
     color: '#000000',
     fontFamily: FONT_FAMILY,
     lineHeight: '1.3',
+    display: 'flex',
+    flexDirection: 'column',
   });
   const box = document.createElement('div');
   Object.assign(box.style, {
     width: '100%',
-    height: '100%',
+    flex: '1 1 auto',
+    minHeight: '0',
     display: 'flex',
     flexDirection: 'column',
     // 'safe' keeps overflowing content start-aligned so scrollHeight reports the overflow.
@@ -266,7 +384,32 @@ function buildFace(text) {
   content.innerHTML = toHtml(text);
   box.appendChild(content);
   card.appendChild(box);
-  return { card, box };
+
+  let note = null;
+  if (errorNote) {
+    const errors = findTexErrors(text);
+    if (errors.length > 0) {
+      note = document.createElement('div');
+      note.className = 'wordcard-error-note';
+      const firstJa = errors[0].ja;
+      const more = errors.length > 1 ? ` ほか${errors.length - 1}件` : '';
+      note.textContent = `⚠ 数式エラー：${firstJa}${more}`;
+      Object.assign(note.style, {
+        flex: 'none',
+        width: '100%',
+        color: ERROR_COLOR,
+        fontSize: '7px',
+        lineHeight: '1.2',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        boxSizing: 'border-box',
+      });
+      card.appendChild(note);
+    }
+  }
+
+  return { card, box, note };
 }
 
 /**
@@ -277,6 +420,9 @@ function buildFace(text) {
  * @property {number} scrollHeight content box scrollHeight at the chosen size
  * @property {number} clientWidth content box clientWidth
  * @property {number} clientHeight content box clientHeight
+ * @property {boolean} [hasFooter] whether an error footer is present
+ * @property {{top: number, bottom: number, left: number, right: number}} [boxRect] bounding client rect of box
+ * @property {{top: number, bottom: number, left: number, right: number} | null} [footerRect] bounding client rect of footer
  */
 
 /** @type {FitInfo | null} */
@@ -328,18 +474,38 @@ export function getLastFitInfo() {
  * The image is exactly round(91/25.4*dpi) x round(55/25.4*dpi) px (1075 x 650 at 300 dpi).
  * After it resolves, getLastFitInfo() describes the chosen font size.
  * @param {string} text cell text (plain text with embedded TeX)
- * @param {{dpi?: number, format?: 'png'|'jpeg'}} [opts]
+ * @param {{dpi?: number, format?: 'png'|'jpeg'|'jpg', errorNote?: boolean}} [opts]
  * @returns {Promise<string>} PNG or JPEG data URL
  */
-export async function renderFace(text, { dpi = 300, format = 'png' } = {}) {
+export async function renderFace(text, { dpi = 300, format = 'png', errorNote = true } = {}) {
   const outW = Math.round((CARD_W_MM / MM_PER_IN) * dpi);
   const outH = Math.round((CARD_H_MM / MM_PER_IN) * dpi);
   const scale = dpi / CSS_DPI;
-  const { card, box } = buildFace(text);
+  const { card, box, note } = buildFace(text, { errorNote });
   document.body.appendChild(card);
   try {
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
-    lastFitInfo = fitFace(box);
+    const fit = fitFace(box);
+    const boxRect = box.getBoundingClientRect();
+    const noteRect = note ? note.getBoundingClientRect() : null;
+    lastFitInfo = {
+      ...fit,
+      hasFooter: !!note,
+      boxRect: {
+        top: boxRect.top,
+        bottom: boxRect.bottom,
+        left: boxRect.left,
+        right: boxRect.right,
+      },
+      footerRect: noteRect
+        ? {
+            top: noteRect.top,
+            bottom: noteRect.bottom,
+            left: noteRect.left,
+            right: noteRect.right,
+          }
+        : null,
+    };
     // Capture outW/scale x outH/scale CSS px so the canvas is (almost) exactly outW x outH;
     // any remaining rounding difference is fixed by copying onto an exact-size canvas.
     const src = await html2canvas(card, {

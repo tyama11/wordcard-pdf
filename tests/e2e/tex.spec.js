@@ -4,11 +4,11 @@ import { test, expect } from '@playwright/test';
  * Runs in the page: renders `text` with renderFace and returns image size,
  * dark pixel count and the fit info.
  */
-async function renderInPage(page, text, dpi = 300) {
+async function renderInPage(page, text, dpi = 300, opts = {}) {
   return page.evaluate(
-    async ({ text, dpi }) => {
+    async ({ text, dpi, opts }) => {
       const m = await import('/src/tex.js');
-      const url = await m.renderFace(text, { dpi });
+      const url = await m.renderFace(text, { dpi, ...opts });
       const img = new Image();
       img.src = url;
       await img.decode();
@@ -30,7 +30,7 @@ async function renderInPage(page, text, dpi = 300) {
         fit: m.getLastFitInfo(),
       };
     },
-    { text, dpi },
+    { text, dpi, opts },
   );
 }
 
@@ -156,4 +156,207 @@ test('auto-fit shrinks long text and keeps it within the card', async ({ page })
   expect(check.overflowsAtNext).toBe(true);
   // long text still produces visible ink
   expect(long.dark).toBeGreaterThan(1000);
+});
+
+test('findTexErrors returns shape [{source, message, ja}] and correct ja strings', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const m = await import('/src/tex.js');
+    return {
+      frac: m.findTexErrors('$\\frac{1}$'),
+      sqrt: m.findTexErrors('$\\sqrt{x$'),
+      valid: m.findTexErrors('$\\frac{1}{2}$'),
+      plain: m.findTexErrors('光合成'),
+      // Test explainTexError mappings directly
+      exMissingArg: m.explainTexError('Missing argument for \\frac'),
+      exMissingClose: m.explainTexError('Missing close brace'),
+      exExtraClose: m.explainTexError('Extra close brace'),
+      exExtraOpen: m.explainTexError('Extra open brace or missing close brace'),
+      exUndefined: m.explainTexError('Undefined control sequence \\foo'),
+      exDelimDollar: m.explainTexError('Unclosed math delimiter $'),
+      exDelimDoubleDollar: m.explainTexError('Unclosed math delimiter $$'),
+      exDelimParen: m.explainTexError('Unclosed math delimiter \\('),
+      exDelimBracket: m.explainTexError('Unclosed math delimiter \\['),
+      exDoubleExp: m.explainTexError('Double exponent: use braces to clarify'),
+      exDoubleSub: m.explainTexError('Double subscript: use braces to clarify'),
+      exOther: m.explainTexError('Some unknown parser error'),
+    };
+  });
+
+  // Shape of frac
+  expect(result.frac).toHaveLength(1);
+  expect(result.frac[0]).toEqual({
+    source: '\\frac{1}',
+    message: expect.stringContaining('Missing argument for'),
+    ja: '\\frac の { } の中身が足りません',
+  });
+
+  // Shape of sqrt with unclosed brace (MathJax throws Missing close brace)
+  expect(result.sqrt).toHaveLength(1);
+  expect(result.sqrt[0].source).toBe('\\sqrt{x');
+  expect(result.sqrt[0].message).toBe('Missing close brace');
+  expect(result.sqrt[0].ja).toBe('閉じかっこ } が足りません');
+
+  // Valid inputs return empty array
+  expect(result.valid).toEqual([]);
+  expect(result.plain).toEqual([]);
+
+  // explainTexError strings
+  expect(result.exMissingArg).toBe('\\frac の { } の中身が足りません');
+  expect(result.exMissingClose).toBe('閉じかっこ } が足りません');
+  expect(result.exExtraClose).toBe('かっこ { } の数が合っていません');
+  expect(result.exExtraOpen).toBe('かっこ { } の数が合っていません');
+  expect(result.exUndefined).toBe('\\foo という命令はありません（つづりを確認してください）');
+  expect(result.exDelimDollar).toBe('$ が閉じられていません（数式は $ と $ ではさみます）');
+  expect(result.exDelimDoubleDollar).toBe('$$ が閉じられていません（数式は $$ と $$ ではさみます）');
+  expect(result.exDelimParen).toBe('\\( が閉じられていません（数式は \\( と \\) ではさみます）');
+  expect(result.exDelimBracket).toBe('\\[ が閉じられていません（数式は \\[ と \\] ではさみます）');
+  expect(result.exDoubleExp).toBe('^ や _ が続けて使われています。{ } でまとめてください');
+  expect(result.exDoubleSub).toBe('^ や _ が続けて使われています。{ } でまとめてください');
+  expect(result.exOther).toBe('数式の書き方に誤りがあります（Some unknown parser error）');
+});
+
+test('undefined control sequence is reported and rendered in red', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const m = await import('/src/tex.js');
+    const errs = m.findTexErrors('$\\foo{x}$');
+    const html = m.toHtml('$\\foo{x}$');
+    return { errs, html };
+  });
+
+  expect(result.errs).toHaveLength(1);
+  expect(result.errs[0]).toEqual({
+    source: '\\foo{x}',
+    message: 'Undefined control sequence \\foo',
+    ja: '\\foo という命令はありません（つづりを確認してください）',
+  });
+
+  // Still renders in red via noundefined in SVG
+  expect(result.html).toContain('<svg');
+  expect(result.html).toContain('fill="red"');
+  expect(result.html).toContain('\\foo');
+});
+
+test('footer present for invalid face and absent for valid face', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const m = await import('/src/tex.js');
+
+    // Invalid face with single error
+    const faceSingle = m.buildFace('$\\frac{1}$');
+    document.body.appendChild(faceSingle.card);
+    const noteSingle = faceSingle.card.querySelector('.wordcard-error-note');
+    const textSingle = noteSingle ? noteSingle.textContent : null;
+    faceSingle.card.remove();
+
+    // Invalid face with multiple errors
+    const faceMultiple = m.buildFace('$\\frac{1}$ and $\\foo{x}$');
+    document.body.appendChild(faceMultiple.card);
+    const noteMultiple = faceMultiple.card.querySelector('.wordcard-error-note');
+    const textMultiple = noteMultiple ? noteMultiple.textContent : null;
+    faceMultiple.card.remove();
+
+    // Valid face
+    const faceValid = m.buildFace('$\\frac{1}{2}$');
+    document.body.appendChild(faceValid.card);
+    const noteValid = faceValid.card.querySelector('.wordcard-error-note');
+    faceValid.card.remove();
+
+    // Plain text face
+    const facePlain = m.buildFace('光合成');
+    document.body.appendChild(facePlain.card);
+    const notePlain = facePlain.card.querySelector('.wordcard-error-note');
+    facePlain.card.remove();
+
+    return {
+      textSingle,
+      textMultiple,
+      hasNoteValid: !!noteValid,
+      hasNotePlain: !!notePlain,
+    };
+  });
+
+  expect(result.textSingle).toBe('⚠ 数式エラー：\\frac の { } の中身が足りません');
+  expect(result.textMultiple).toBe('⚠ 数式エラー：\\frac の { } の中身が足りません ほか1件');
+  expect(result.hasNoteValid).toBe(false);
+  expect(result.hasNotePlain).toBe(false);
+});
+
+test('footer does not overlap fitted content in offscreen render', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const m = await import('/src/tex.js');
+
+    // Test with short invalid text
+    const shortFace = m.buildFace('$\\frac{1}$');
+    document.body.appendChild(shortFace.card);
+    m.fitFace(shortFace.box);
+    const shortBoxRect = shortFace.box.getBoundingClientRect();
+    const shortNote = shortFace.card.querySelector('.wordcard-error-note');
+    const shortNoteRect = shortNote.getBoundingClientRect();
+    const shortComputed = window.getComputedStyle(shortNote);
+    const shortFontSize = shortComputed.fontSize;
+    shortFace.card.remove();
+
+    // Test with long text + invalid TeX to force auto-fit down
+    const longText = '説明文 '.repeat(50) + '$\\frac{1}$';
+    const longFace = m.buildFace(longText);
+    document.body.appendChild(longFace.card);
+    const fitInfo = m.fitFace(longFace.box);
+    const longBoxRect = longFace.box.getBoundingClientRect();
+    const longNote = longFace.card.querySelector('.wordcard-error-note');
+    const longNoteRect = longNote.getBoundingClientRect();
+    longFace.card.remove();
+
+    // Also verify via renderFace and getLastFitInfo
+    await m.renderFace('$\\foo{x}$');
+    const lastFit = m.getLastFitInfo();
+
+    return {
+      shortBoxBottom: shortBoxRect.bottom,
+      shortNoteTop: shortNoteRect.top,
+      shortFontSize,
+      longBoxBottom: longBoxRect.bottom,
+      longNoteTop: longNoteRect.top,
+      longFitFontSize: fitInfo.fontSize,
+      lastFitBoxBottom: lastFit.boxRect.bottom,
+      lastFitFooterTop: lastFit.footerRect.top,
+      hasFooter: lastFit.hasFooter,
+    };
+  });
+
+  // Short face: box bottom must not exceed note top
+  expect(result.shortBoxBottom).toBeLessThanOrEqual(result.shortNoteTop);
+  expect(result.shortFontSize).toBe('7px');
+
+  // Long face: auto-fitted content fits within remaining height and does not overlap
+  expect(result.longFitFontSize).toBeLessThan(48);
+  expect(result.longBoxBottom).toBeLessThanOrEqual(result.longNoteTop);
+
+  // renderFace getLastFitInfo bounding boxes
+  expect(result.hasFooter).toBe(true);
+  expect(result.lastFitBoxBottom).toBeLessThanOrEqual(result.lastFitFooterTop);
+});
+
+test('renderFace with errorNote:false has no footer', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const m = await import('/src/tex.js');
+
+    // renderFace with errorNote: false on invalid formula
+    await m.renderFace('$\\frac{1}$', { errorNote: false });
+    const fitNoFooter = m.getLastFitInfo();
+
+    // buildFace with errorNote: false
+    const face = m.buildFace('$\\frac{1}$', { errorNote: false });
+    document.body.appendChild(face.card);
+    const note = face.card.querySelector('.wordcard-error-note');
+    face.card.remove();
+
+    return {
+      hasFooter: fitNoFooter.hasFooter,
+      footerRect: fitNoFooter.footerRect,
+      hasNoteElement: !!note,
+    };
+  });
+
+  expect(result.hasFooter).toBe(false);
+  expect(result.footerRect).toBeNull();
+  expect(result.hasNoteElement).toBe(false);
 });
