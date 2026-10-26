@@ -37,6 +37,9 @@ The application is structured as a clean, single-column workflow divided into lo
 - **Post-Load Information**:
   - After loading and parsing the CSV:
     - Display card count summary: `◯枚のカード（A4 ◯枚・両面）` (calculated as `Math.ceil(cardCount / 10)` A4 sheets).
+    - **Yen Sign Normalization Note (`円記号の自動読み替え`)**:
+      - If cells contain `¥` or `￥` preceding TeX commands or delimiters, they are automatically normalized to `\` via `normalizeInput()`.
+      - If any replacements occur (count > 0), an info notice is displayed in `#alert-container`: `円記号（¥）をバックスラッシュ（\）として読み替えました：◯か所`.
 - **Sample CSV Link**:
   - Text: `サンプルCSVをダウンロード`
   - Link target: `./sample.csv` (download attribute).
@@ -83,6 +86,17 @@ The application is structured as a clean, single-column workflow divided into lo
 - **Generate Button**:
   - Button text: `PDFを作成してダウンロード`
   - Disabled state: Disabled if no valid CSV is loaded or if PDF generation is in progress.
+- **Pre-Generation Confirmation Dialog (`<dialog class="confirm-dialog">`)**:
+  - Trigger: If there are TeX syntax errors when clicking `PDFを作成してダウンロード`, PDF generation does not start immediately. Instead, `<dialog class="confirm-dialog">` opens via `showModal()`. If there are no errors, no dialog opens and generation starts directly.
+  - Title: `数式の書き方に誤りが◯件あります`
+  - Explanation: `このまま作成すると、誤りのある部分は赤字で印刷され、カードの下に「⚠ 数式エラー」と表示されます。`
+  - Error List: A scrollable container (`.confirm-dialog-list`) displaying ALL error entries with row number, side (`表面` or `裏面`), source code in `<code>`, and Japanese explanation translated via `explainTexError` (e.g., `3行目・裏面：<code>\frac{1}</code> — \frac の { } の中身が足りません`).
+  - Buttons:
+    - `戻って直す`: Closes the dialog, cancels generation, and returns keyboard focus to the file-select button (`#browse-btn`).
+    - `このまま作成する`: Closes the dialog and proceeds with PDF generation using `renderFace(..., { errorNote: true })`.
+  - Accessibility & Keyboard:
+    - Esc key closes the dialog without generating and returns focus to the file-select button (same as `戻って直す`).
+    - Initial focus is set on `戻って直す`.
 - **Progress Bar & Status Display**:
   - During generation:
     - Show progress bar (HTML5 `<progress>` or styled bar).
@@ -107,8 +121,9 @@ All error messages must be clearly displayed in Japanese:
 - **Unreadable File / Decode Error**:
   - Message: `ファイルを読み込めませんでした。文字コード（UTF-8 または Shift_JIS）およびファイル形式をご確認ください。`
 - **TeX Syntax Errors**:
-  - Behavior: Do not crash generation. The raw TeX formula will be rendered in red text on the card.
-  - Notification message: `数式記法エラー: ◯行目（◯面）に無効なTeX記法が含まれていますが、PDFはそのまま生成されました。`
+  - Behavior: Does not crash generation. The raw TeX formula will be rendered in red text on the card.
+  - Step 1 Warning Banner: In `#alert-container`, displays up to 10 entries formatted as `◯行目・[表面|裏面]：<source> — <ja>` (e.g. `3行目・裏面：\frac{1} — \frac の { } の中身が足りません`), followed by `ほか◯件` if more than 10 errors exist.
+  - Card Footer Error Note: When `errorNote: true`, any card face with TeX errors includes a red footer note at the bottom: `⚠ 数式エラー：<ja explanation>` (appends `ほか◯件` if multiple errors on the face).
 - **Large CSV Warning (> 1000 cards)**:
   - When card count > 1000:
     - Warning banner: `カード数が1,000枚を超えているため（◯枚）、PDF生成に数分かかる場合があります。ブラウザを閉じずにお待ちください。`

@@ -159,6 +159,17 @@
       </details>
     </main>
 
+    <!-- Confirmation Dialog -->
+    <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-dialog-title">
+      <h2 id="confirm-dialog-title">数式の確認</h2>
+      <p>このまま作成すると、誤りのある部分は赤字で印刷され、カードの下に「⚠ 数式エラー」と表示されます。</p>
+      <div class="confirm-dialog-list" id="confirm-dialog-list"></div>
+      <footer class="confirm-dialog-footer">
+        <button type="button" id="dialog-cancel-btn" class="btn secondary-btn" autofocus>戻って直す</button>
+        <button type="button" id="dialog-proceed-btn" class="btn primary-btn">このまま作成する</button>
+      </footer>
+    </dialog>
+
     <footer class="app-footer">
       <div class="footer-links">
         <a href="https://github.com/tyama11/wordcard-pdf" target="_blank" rel="noopener noreferrer">

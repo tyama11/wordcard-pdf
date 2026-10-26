@@ -1,7 +1,8 @@
 import './style.css';
 import Papa from 'papaparse';
 import { decodeBytes, parseCards } from './csv.js';
-import { renderFace, findTexErrors, splitTex } from './tex.js';
+import { renderFace, findTexErrors } from './tex.js';
+import { normalizeInput } from './texsplit.js';
 import { buildCardsPdf, buildCalibrationPdf } from './pdf.js';
 
 const STORAGE_KEYS = {
@@ -163,6 +164,7 @@ function drawCalibrationInstructions(doc, pageNumber, flip) {
 let loadedCards = [];
 let hasDetectedHeader = false;
 let currentTexErrors = [];
+let isProceedingWithGeneration = false;
 
 // DOM Elements
 const dropZone = document.getElementById('drop-zone');
@@ -172,6 +174,12 @@ const summaryContainer = document.getElementById('summary-container');
 const cardSummary = document.getElementById('card-summary');
 const largeFileWarning = document.getElementById('large-file-warning');
 const alertContainer = document.getElementById('alert-container');
+
+const confirmDialog = document.getElementById('confirm-dialog');
+const confirmDialogTitle = document.getElementById('confirm-dialog-title');
+const confirmDialogList = document.getElementById('confirm-dialog-list');
+const dialogCancelBtn = document.getElementById('dialog-cancel-btn');
+const dialogProceedBtn = document.getElementById('dialog-proceed-btn');
 
 const flipSelect = document.getElementById('flip-select');
 const offsetXInput = document.getElementById('offset-x');
@@ -245,9 +253,9 @@ function updateDuplexNotice() {
 
 /**
  * Render error/warning alerts in the UI.
- * @param {{ error?: string, warnings?: string[] }} alerts
+ * @param {{ error?: string, warnings?: Array<{row: number, side: '表面'|'裏面', source: string, ja: string}>, info?: string }} alerts
  */
-function renderAlerts({ error, warnings = [] } = {}) {
+function renderAlerts({ error, warnings = [], info } = {}) {
   alertContainer.innerHTML = '';
 
   if (error) {
@@ -255,6 +263,13 @@ function renderAlerts({ error, warnings = [] } = {}) {
     errBox.className = 'alert-box alert-error';
     errBox.textContent = error;
     alertContainer.appendChild(errBox);
+  }
+
+  if (info) {
+    const infoBox = document.createElement('div');
+    infoBox.className = 'alert-box alert-info';
+    infoBox.textContent = info;
+    alertContainer.appendChild(infoBox);
   }
 
   if (warnings && warnings.length > 0) {
@@ -271,7 +286,7 @@ function renderAlerts({ error, warnings = [] } = {}) {
     const shown = warnings.slice(0, 10);
     for (const item of shown) {
       const li = document.createElement('li');
-      li.textContent = item;
+      li.textContent = `${item.row}行目・${item.side}：${item.source} — ${item.ja}`;
       ul.appendChild(li);
     }
     warnBox.appendChild(ul);
@@ -280,7 +295,7 @@ function renderAlerts({ error, warnings = [] } = {}) {
       const more = document.createElement('p');
       more.style.margin = '6px 0 0';
       more.style.fontSize = '0.85rem';
-      more.textContent = `… 他 ${warnings.length - 10} 件`;
+      more.textContent = `ほか${warnings.length - 10}件`;
       warnBox.appendChild(more);
     }
 
@@ -292,7 +307,7 @@ function renderAlerts({ error, warnings = [] } = {}) {
  * Validate TeX expressions across all loaded cards.
  * @param {Array<{front: string, back: string}>} cards
  * @param {boolean} hasHeader
- * @returns {string[]}
+ * @returns {Array<{row: number, side: '表面'|'裏面', source: string, ja: string}>}
  */
 function validateCardsTex(cards, hasHeader) {
   const entries = [];
@@ -300,26 +315,28 @@ function validateCardsTex(cards, hasHeader) {
 
   for (let i = 0; i < cards.length; i++) {
     const card = cards[i];
-    const rowNum = i + rowOffset;
+    const row = i + rowOffset;
 
     // Check front
-    for (const part of splitTex(card.front)) {
-      if (part.type === 'text') continue;
-      const testExpr = part.type === 'inline' ? `$${part.value}$` : `$$${part.value}$$`;
-      const errs = findTexErrors(testExpr);
-      if (errs.length > 0) {
-        entries.push(`${rowNum}行目・表面: ${part.value}`);
-      }
+    const frontErrors = findTexErrors(card.front);
+    for (const err of frontErrors) {
+      entries.push({
+        row,
+        side: '表面',
+        source: err.source,
+        ja: err.ja,
+      });
     }
 
     // Check back
-    for (const part of splitTex(card.back)) {
-      if (part.type === 'text') continue;
-      const testExpr = part.type === 'inline' ? `$${part.value}$` : `$$${part.value}$$`;
-      const errs = findTexErrors(testExpr);
-      if (errs.length > 0) {
-        entries.push(`${rowNum}行目・裏面: ${part.value}`);
-      }
+    const backErrors = findTexErrors(card.back);
+    for (const err of backErrors) {
+      entries.push({
+        row,
+        side: '裏面',
+        source: err.source,
+        ja: err.ja,
+      });
     }
   }
 
@@ -354,6 +371,18 @@ function processCsvText(rawText) {
     return;
   }
 
+  // Normalize yen signs to backslashes for TeX expressions
+  let yenCount = 0;
+  for (const card of cards) {
+    const normFront = normalizeInput(card.front);
+    card.front = normFront.text;
+    yenCount += normFront.count;
+
+    const normBack = normalizeInput(card.back);
+    card.back = normBack.text;
+    yenCount += normBack.count;
+  }
+
   loadedCards = cards;
   generateBtn.disabled = false;
 
@@ -374,7 +403,10 @@ function processCsvText(rawText) {
 
   // TeX error check
   currentTexErrors = validateCardsTex(cards, hasDetectedHeader);
-  renderAlerts({ warnings: currentTexErrors });
+  renderAlerts({
+    info: yenCount > 0 ? `円記号（¥）をバックスラッシュ（\\）として読み替えました：${yenCount}か所` : undefined,
+    warnings: currentTexErrors,
+  });
 }
 
 /**
@@ -467,8 +499,41 @@ calibrationBtn.addEventListener('click', () => {
   triggerDownload(blob, 'wordcards-calibration.pdf');
 });
 
-// Generate PDF
-generateBtn.addEventListener('click', async () => {
+/**
+ * Opens pre-generation confirmation dialog listing all TeX syntax errors.
+ */
+function openConfirmDialog() {
+  confirmDialogTitle.textContent = `数式の書き方に誤りが${currentTexErrors.length}件あります`;
+  confirmDialogList.innerHTML = '';
+
+  for (const err of currentTexErrors) {
+    const item = document.createElement('div');
+    item.className = 'confirm-dialog-item';
+    item.style.marginBottom = '6px';
+
+    const rowSide = document.createElement('span');
+    rowSide.textContent = `${err.row}行目・${err.side}：`;
+
+    const code = document.createElement('code');
+    code.textContent = err.source;
+
+    const ja = document.createElement('span');
+    ja.textContent = ` — ${err.ja}`;
+
+    item.appendChild(rowSide);
+    item.appendChild(code);
+    item.appendChild(ja);
+    confirmDialogList.appendChild(item);
+  }
+
+  confirmDialog.showModal();
+  dialogCancelBtn.focus();
+}
+
+/**
+ * Generates and downloads the PDF from loaded cards.
+ */
+async function generatePdf() {
   if (loadedCards.length === 0) return;
 
   const flip = flipSelect.value;
@@ -493,7 +558,7 @@ generateBtn.addEventListener('click', async () => {
     const renderFaceWithYield = async (text) => {
       // Yield to the event loop between faces so progress bar updates smoothly
       await new Promise((resolve) => setTimeout(resolve, 0));
-      return renderFace(text, { format: 'png' });
+      return renderFace(text, { format: 'png', errorNote: true });
     };
 
     const pdfBytes = await buildCardsPdf(loadedCards, renderFaceWithYield, {
@@ -525,6 +590,37 @@ generateBtn.addEventListener('click', async () => {
     cropMarksCheckbox.disabled = false;
     calibrationBtn.disabled = false;
   }
+}
+
+// Generate PDF
+generateBtn.addEventListener('click', () => {
+  if (loadedCards.length === 0) return;
+
+  if (currentTexErrors.length > 0) {
+    openConfirmDialog();
+  } else {
+    generatePdf();
+  }
+});
+
+// Confirmation Dialog events
+dialogCancelBtn.addEventListener('click', () => {
+  isProceedingWithGeneration = false;
+  confirmDialog.close();
+  browseBtn.focus();
+});
+
+dialogProceedBtn.addEventListener('click', () => {
+  isProceedingWithGeneration = true;
+  confirmDialog.close();
+  generatePdf();
+});
+
+confirmDialog.addEventListener('close', () => {
+  if (!isProceedingWithGeneration) {
+    browseBtn.focus();
+  }
+  isProceedingWithGeneration = false;
 });
 
 // Initialize settings
