@@ -31,6 +31,7 @@ import '@mathjax/mathjax-newcm-font/js/svg/dynamic/symbols.js';
 import '@mathjax/mathjax-newcm-font/js/svg/dynamic/variants.js';
 import html2canvas from 'html2canvas-pro';
 import { splitTex } from './texsplit.js';
+import { facePadding } from './layout.js';
 
 export { splitTex };
 
@@ -38,7 +39,6 @@ const MM_PER_IN = 25.4;
 const CSS_DPI = 96;
 const CARD_W_MM = 91;
 const CARD_H_MM = 55;
-const PADDING_MM = 4;
 const PX_PER_MM = CSS_DPI / MM_PER_IN;
 
 /** Card face width in CSS px (91 mm at 96 dpi = 343.94 px). */
@@ -336,13 +336,14 @@ export function toHtml(text) {
 
 /**
  * Build the off-screen card face element (not yet attached to the document).
- * Structure: card (91x55 mm, 4 mm padding) > box (content box, overflow checked) > content
+ * Structure: card (91x55 mm, padding per facePadding(holeSide)) > box (content box, overflow checked) > content
  * and optional footer (.wordcard-error-note) when errors exist.
  * @param {string} text
- * @param {{errorNote?: boolean}} [opts]
+ * @param {{errorNote?: boolean, holeSide?: 'left'|'right'|null}} [opts]
  * @returns {{card: HTMLDivElement, box: HTMLDivElement, note: HTMLDivElement | null}}
  */
-export function buildFace(text, { errorNote = true } = {}) {
+export function buildFace(text, { errorNote = true, holeSide = null } = {}) {
+  const pad = facePadding(holeSide);
   const card = document.createElement('div');
   card.className = 'wordcard-face';
   Object.assign(card.style, {
@@ -351,7 +352,10 @@ export function buildFace(text, { errorNote = true } = {}) {
     top: '0px',
     width: `${FACE_WIDTH_PX}px`,
     height: `${FACE_HEIGHT_PX}px`,
-    padding: `${PADDING_MM * PX_PER_MM}px`,
+    paddingTop: `${pad.top * PX_PER_MM}px`,
+    paddingRight: `${pad.right * PX_PER_MM}px`,
+    paddingBottom: `${pad.bottom * PX_PER_MM}px`,
+    paddingLeft: `${pad.left * PX_PER_MM}px`,
     margin: '0',
     border: '0',
     boxSizing: 'border-box',
@@ -474,14 +478,14 @@ export function getLastFitInfo() {
  * The image is exactly round(91/25.4*dpi) x round(55/25.4*dpi) px (1075 x 650 at 300 dpi).
  * After it resolves, getLastFitInfo() describes the chosen font size.
  * @param {string} text cell text (plain text with embedded TeX)
- * @param {{dpi?: number, format?: 'png'|'jpeg'|'jpg', errorNote?: boolean}} [opts]
+ * @param {{dpi?: number, format?: 'png'|'jpeg'|'jpg', errorNote?: boolean, holeSide?: 'left'|'right'|null}} [opts]
  * @returns {Promise<string>} PNG or JPEG data URL
  */
-export async function renderFace(text, { dpi = 300, format = 'png', errorNote = true } = {}) {
+export async function renderFace(text, { dpi = 300, format = 'png', errorNote = true, holeSide = null } = {}) {
   const outW = Math.round((CARD_W_MM / MM_PER_IN) * dpi);
   const outH = Math.round((CARD_H_MM / MM_PER_IN) * dpi);
   const scale = dpi / CSS_DPI;
-  const { card, box, note } = buildFace(text, { errorNote });
+  const { card, box, note } = buildFace(text, { errorNote, holeSide });
   document.body.appendChild(card);
   try {
     if (document.fonts && document.fonts.ready) await document.fonts.ready;

@@ -6,10 +6,13 @@
 import { jsPDF } from 'jspdf';
 import {
   GRID,
+  HOLE,
   frontRect,
   backRect,
   cropMarkLines,
   mapToBack,
+  holeSide,
+  holeCenter,
 } from './layout.js';
 
 /**
@@ -68,18 +71,50 @@ function drawCropMarks(doc, isBack, opts) {
 }
 
 /**
+ * Draws hole punch guides on the current page of the PDF document.
+ *
+ * @param {jsPDF} doc jsPDF document instance
+ * @param {number[]} slots Slot indices to draw guides for
+ */
+function drawHoleGuides(doc, slots) {
+  if (!slots || slots.length === 0) {
+    return;
+  }
+  const prevDrawColor = doc.getDrawColor();
+  const prevLineWidth = doc.getLineWidth();
+
+  doc.setDrawColor(150, 150, 150);
+  doc.setLineWidth(0.2);
+
+  const radius = HOLE.diameter / 2;
+  const crossHalfLen = 1; // 2 mm long cross
+
+  for (const slot of slots) {
+    const { x: cx, y: cy } = holeCenter(slot);
+    doc.circle(cx, cy, radius, 'S');
+    doc.line(cx - crossHalfLen, cy, cx + crossHalfLen, cy);
+    doc.line(cx, cy - crossHalfLen, cx, cy + crossHalfLen);
+  }
+
+  doc.setDrawColor(prevDrawColor);
+  doc.setLineWidth(prevLineWidth);
+}
+
+/**
  * Builds a duplex-printable PDF containing business-card size word cards.
  *
  * Pages are generated in duplex printing order:
  * Sheet 1 Front, Sheet 1 Back, Sheet 2 Front, Sheet 2 Back, ...
  *
  * @param {Array<{ front: string, back: string }>} cards List of cards
- * @param {(text: string) => Promise<string>} renderFace Async renderer returning PNG/JPEG data URL
+ * @param {(text: string, opts?: { holeSide: 'left'|'right'|null }) => Promise<string>} renderFace Async renderer returning PNG/JPEG data URL
  * @param {object} [opts] Options
  * @param {'long'|'short'} [opts.flip='long'] Duplex flip mode
  * @param {number} [opts.backOffsetX=0] Horizontal calibration offset for back side (mm)
  * @param {number} [opts.backOffsetY=0] Vertical calibration offset for back side (mm)
  * @param {boolean} [opts.cropMarks=true] Whether to draw crop marks in margins
+ * @param {boolean} [opts.hole=false] Whether cards have a punch hole
+ * @param {'none'|'first'|'all'} [opts.holeGuide='none'] Hole punch guide mode on front faces
  * @param {(done: number, total: number) => void} [opts.onProgress] Progress callback
  * @returns {Promise<Uint8Array>}
  */
@@ -89,8 +124,14 @@ export async function buildCardsPdf(cards, renderFace, opts = {}) {
     backOffsetX = 0,
     backOffsetY = 0,
     cropMarks = true,
+    hole = false,
+    holeGuide = 'none',
     onProgress,
   } = opts;
+
+  if (holeGuide !== 'none' && holeGuide !== 'first' && holeGuide !== 'all') {
+    throw new Error(`Unknown holeGuide option: "${holeGuide}". Must be 'none', 'first', or 'all'.`);
+  }
 
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -136,7 +177,10 @@ export async function buildCardsPdf(cards, renderFace, opts = {}) {
 
     for (const { card, slot } of sheetCards) {
       if (!isBlank(card.front)) {
-        const dataUrl = await renderFace(card.front);
+        const frontOpts = {
+          holeSide: hole ? holeSide('front', flip) : null,
+        };
+        const dataUrl = await renderFace(card.front, frontOpts);
         if (dataUrl) {
           const rect = frontRect(slot);
           const format = getImageFormat(dataUrl);
@@ -146,13 +190,23 @@ export async function buildCardsPdf(cards, renderFace, opts = {}) {
       stepProgress();
     }
 
+    if (hole && holeGuide !== 'none') {
+      const guideSlots = holeGuide === 'first'
+        ? (sheetCards.some((sc) => sc.slot === 0) ? [0] : [])
+        : sheetCards.map((sc) => sc.slot);
+      drawHoleGuides(doc, guideSlots);
+    }
+
     // --- Sheet Back Page ---
     doc.addPage();
     drawCropMarks(doc, true, layoutOpts);
 
     for (const { card, slot } of sheetCards) {
       if (!isBlank(card.back)) {
-        const dataUrl = await renderFace(card.back);
+        const backOpts = {
+          holeSide: hole ? holeSide('back', flip) : null,
+        };
+        const dataUrl = await renderFace(card.back, backOpts);
         if (dataUrl) {
           const rect = backRect(slot, layoutOpts);
           const format = getImageFormat(dataUrl);
