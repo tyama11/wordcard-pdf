@@ -31,6 +31,10 @@ export const GRID = {
   y: 11,
 };
 
+export const HOLE = { diameter: 6, centerFromEdge: 8, clearance: 2 };
+
+export const BASE_PADDING = 4;
+
 /**
  * Returns the front-face rect {x, y, w, h} (in mm) for a card slot (0..9).
  * Origin is the top-left of the page, y downward.
@@ -190,4 +194,65 @@ export function cropMarkLines() {
   }
 
   return lines;
+}
+
+/**
+ * Returns which side ('left' or 'right') of a card face contains the punch hole.
+ *
+ * @param {'front'|'back'} face Card face
+ * @param {'long'|'short'} [flip='long'] Long-edge or short-edge binding
+ * @returns {'left'|'right'}
+ */
+export function holeSide(face, flip = 'long') {
+  if (flip !== 'long' && flip !== 'short') {
+    throw new Error(`Unknown flip option: "${flip}". Must be 'long' or 'short'.`);
+  }
+  if (face === 'front') {
+    return 'left';
+  }
+  if (face === 'back') {
+    return flip === 'long' ? 'right' : 'left';
+  }
+  throw new Error(`Unknown face option: "${face}". Must be 'front' or 'back'.`);
+}
+
+/**
+ * Returns inner card padding (in mm) accounting for punch-hole clearance.
+ *
+ * @param {'left'|'right'|null|undefined} [side] Side where hole clearance is needed
+ * @returns {{ top: number, right: number, bottom: number, left: number }}
+ */
+export function facePadding(side) {
+  if (side === null || side === undefined) {
+    return {
+      top: BASE_PADDING,
+      right: BASE_PADDING,
+      bottom: BASE_PADDING,
+      left: BASE_PADDING,
+    };
+  }
+  if (side !== 'left' && side !== 'right') {
+    throw new Error(`Unknown side option: "${side}". Must be 'left', 'right', null, or undefined.`);
+  }
+  const holePadding = HOLE.centerFromEdge + HOLE.diameter / 2 + HOLE.clearance;
+  return {
+    top: BASE_PADDING,
+    right: side === 'right' ? holePadding : BASE_PADDING,
+    bottom: BASE_PADDING,
+    left: side === 'left' ? holePadding : BASE_PADDING,
+  };
+}
+
+/**
+ * Returns the punch-hole center coordinate {x, y} in page mm (front coordinates).
+ *
+ * @param {number} slot Slot index 0..9 on a sheet
+ * @returns {{ x: number, y: number }}
+ */
+export function holeCenter(slot) {
+  const rect = frontRect(slot);
+  return {
+    x: rect.x + HOLE.centerFromEdge,
+    y: rect.y + CARD.height / 2,
+  };
 }
