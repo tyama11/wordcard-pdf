@@ -98,6 +98,23 @@
           </label>
         </div>
 
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="hole" checked>
+            <span>穴あけ位置をあける（左辺中央・直径6mm）</span>
+          </label>
+          <p class="help-text">文字が穴にかからないよう、穴側に余白をとります（裏面も穴の位置に合わせて自動調整）</p>
+        </div>
+
+        <div class="form-group">
+          <label for="hole-guide">穴の目印</label>
+          <select id="hole-guide">
+            <option value="none">印刷しない</option>
+            <option value="first" selected>各シートの左上のカードのみ</option>
+            <option value="all">すべてのカード</option>
+          </select>
+        </div>
+
         <div class="calibration-block">
           <button type="button" id="calibration-btn" class="btn secondary-btn">位置合わせシートをダウンロード</button>
           <p class="help-text">両面印刷した位置合わせシートを光に透かし、表の十字が裏の目盛りのどこに見えるかを読み取ります。読み取った値を、今の補正値に足して入力してください（裏面を見て +X＝右、+Y＝下）。</p>
