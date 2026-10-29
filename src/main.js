@@ -10,6 +10,8 @@ const STORAGE_KEYS = {
   backOffsetX: 'wordcard_backOffsetX',
   backOffsetY: 'wordcard_backOffsetY',
   cropMarks: 'wordcard_cropMarks',
+  hole: 'wordcard_hole',
+  holeGuide: 'wordcard_holeGuide',
 };
 
 const HEADER_PAIRS = [
@@ -185,6 +187,8 @@ const flipSelect = document.getElementById('flip-select');
 const offsetXInput = document.getElementById('offset-x');
 const offsetYInput = document.getElementById('offset-y');
 const cropMarksCheckbox = document.getElementById('crop-marks');
+const holeCheckbox = document.getElementById('hole');
+const holeGuideSelect = document.getElementById('hole-guide');
 const calibrationBtn = document.getElementById('calibration-btn');
 
 const generateBtn = document.getElementById('generate-btn');
@@ -193,6 +197,15 @@ const progressBar = document.getElementById('progress-bar');
 const progressText = document.getElementById('progress-text');
 const printNotice = document.getElementById('print-notice');
 const duplexNoticeText = document.getElementById('duplex-notice-text');
+
+/**
+ * Updates disabled state of the hole guide select according to hole checkbox.
+ */
+function updateHoleGuideState() {
+  if (holeGuideSelect && holeCheckbox) {
+    holeGuideSelect.disabled = !holeCheckbox.checked;
+  }
+}
 
 /**
  * Load settings from localStorage wrapped in try/catch.
@@ -220,9 +233,20 @@ function loadSettings() {
     if (savedCropMarks !== null) {
       cropMarksCheckbox.checked = savedCropMarks === 'true';
     }
+
+    const savedHole = localStorage.getItem(STORAGE_KEYS.hole);
+    if (savedHole !== null) {
+      holeCheckbox.checked = savedHole === 'true';
+    }
+
+    const savedHoleGuide = localStorage.getItem(STORAGE_KEYS.holeGuide);
+    if (savedHoleGuide === 'none' || savedHoleGuide === 'first' || savedHoleGuide === 'all') {
+      holeGuideSelect.value = savedHoleGuide;
+    }
   } catch (e) {
     console.warn('localStorage is unavailable:', e);
   }
+  updateHoleGuideState();
   updateDuplexNotice();
 }
 
@@ -235,6 +259,8 @@ function saveSettings() {
     localStorage.setItem(STORAGE_KEYS.backOffsetX, offsetXInput.value);
     localStorage.setItem(STORAGE_KEYS.backOffsetY, offsetYInput.value);
     localStorage.setItem(STORAGE_KEYS.cropMarks, String(cropMarksCheckbox.checked));
+    localStorage.setItem(STORAGE_KEYS.hole, String(holeCheckbox.checked));
+    localStorage.setItem(STORAGE_KEYS.holeGuide, holeGuideSelect.value);
   } catch (e) {
     console.warn('Failed to save to localStorage:', e);
   }
@@ -467,6 +493,11 @@ dropZone.addEventListener('keydown', (e) => {
 // Settings change
 flipSelect.addEventListener('change', saveSettings);
 cropMarksCheckbox.addEventListener('change', saveSettings);
+holeCheckbox.addEventListener('change', () => {
+  updateHoleGuideState();
+  saveSettings();
+});
+holeGuideSelect.addEventListener('change', saveSettings);
 
 offsetXInput.addEventListener('change', () => {
   const val = parseFloat(offsetXInput.value);
@@ -540,12 +571,16 @@ async function generatePdf() {
   const backOffsetX = clampOffset(parseFloat(offsetXInput.value) || 0);
   const backOffsetY = clampOffset(parseFloat(offsetYInput.value) || 0);
   const cropMarks = cropMarksCheckbox.checked;
+  const hole = holeCheckbox.checked;
+  const holeGuide = holeGuideSelect.value;
 
   generateBtn.disabled = true;
   flipSelect.disabled = true;
   offsetXInput.disabled = true;
   offsetYInput.disabled = true;
   cropMarksCheckbox.disabled = true;
+  holeCheckbox.disabled = true;
+  holeGuideSelect.disabled = true;
   calibrationBtn.disabled = true;
   printNotice.hidden = true;
 
@@ -555,10 +590,10 @@ async function generatePdf() {
   progressText.textContent = `0 / ${loadedCards.length * 2} 面を作成中`;
 
   try {
-    const renderFaceWithYield = async (text) => {
+    const renderFaceWithYield = async (text, faceOpts) => {
       // Yield to the event loop between faces so progress bar updates smoothly
       await new Promise((resolve) => setTimeout(resolve, 0));
-      return renderFace(text, { format: 'png', errorNote: true });
+      return renderFace(text, { format: 'png', errorNote: true, ...faceOpts });
     };
 
     const pdfBytes = await buildCardsPdf(loadedCards, renderFaceWithYield, {
@@ -566,6 +601,8 @@ async function generatePdf() {
       backOffsetX,
       backOffsetY,
       cropMarks,
+      hole,
+      holeGuide,
       onProgress: (done, total) => {
         progressBar.max = total;
         progressBar.value = done;
@@ -588,6 +625,8 @@ async function generatePdf() {
     offsetXInput.disabled = false;
     offsetYInput.disabled = false;
     cropMarksCheckbox.disabled = false;
+    holeCheckbox.disabled = false;
+    updateHoleGuideState();
     calibrationBtn.disabled = false;
   }
 }

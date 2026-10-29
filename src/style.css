@@ -283,6 +283,21 @@ select option {
   color: var(--text-main);
 }
 
+select:disabled,
+input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.checkbox-label:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.checkbox-group .help-text {
+  margin-left: 30px;
+}
+
 .input-with-unit {
   display: flex;
   align-items: center;
