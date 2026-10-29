@@ -34,6 +34,21 @@ starting 1 mm outside the grid and 5 mm long (clipped to the page). Drawn on bot
 mapped with the same duplex mapping + offset as cards (the grid is symmetric, so with zero offset they coincide).
 Option `cropMarks` (default true).
 
+### Punch hole
+
+One punch hole for a ring: on the FRONT face at the LEFT edge, vertically centered; diameter 6 mm, center 8 mm from the card edge. Not configurable.
+Option `hole` (checkbox, default true in UI; default false in `buildCardsPdf`).
+
+- When ON, the text area avoids the hole with a band: padding on the hole side becomes 13 mm (8 mm center + 3 mm radius + 2 mm clearance) instead of 4 mm; other sides stay 4 mm. Text is centered and auto-fit inside the remaining area.
+- On the back face, the hole is on the RIGHT for long-edge binding (`flip: 'long'`) and on the LEFT for short-edge binding (`flip: 'short'`), so the back padding follows that side automatically.
+
+Option `holeGuide` (select, default 'first' in UI; default 'none' in `buildCardsPdf`): `'none'` | `'first'` | `'all'`. Disabled when `hole` is OFF.
+- Draws a thin gray circle (diameter 6 mm, 0.2 mm line) with a small center cross at the hole position on the FRONT page only.
+- Values:
+  - `'none'`: Do not draw guide.
+  - `'first'`: Top-left card only on each sheet. Punch the marked card, then stack cut cards and punch through using it as a template.
+  - `'all'`: All cards on the sheet. Punch each card at its mark.
+
 ### Calibration sheet
 
 Separate 2-page PDF (front, back). Front: crosshairs (10 mm arms, 0.2 mm) at the 4 grid corners and the center of the grid.
@@ -71,6 +86,10 @@ Rendering: MathJax v4 (`@mathjax/src`) TeX input with the `mhchem` package, SVG 
 
 - `layout.js` (pure, no DOM):
   - `export const PAGE`, `CARD`, `GRID` constants.
+  - `export const HOLE = {diameter:6, centerFromEdge:8, clearance:2}`, `BASE_PADDING = 4`.
+  - `export function holeSide(face, flip) -> 'left'|'right'`
+  - `export function facePadding(side) -> {top,right,bottom,left}`
+  - `export function holeCenter(slot) -> {x,y}`
   - `export function frontRect(slot) -> {x,y,w,h}`
   - `export function backRect(slot, {flip='long', backOffsetX=0, backOffsetY=0}={}) -> {x,y,w,h}`
   - `export function mapToBack(rect, opts) -> rect` (the duplex mapping above, works for any rect/point with w=h=0)
@@ -78,13 +97,15 @@ Rendering: MathJax v4 (`@mathjax/src`) TeX input with the `mhchem` package, SVG 
   - `export function cropMarkLines() -> [{x1,y1,x2,y2}]` (front coordinates)
 - `csv.js` (pure): `export function decodeBytes(Uint8Array) -> string`, `export function parseCards(text) -> [{front, back}]`
 - `tex.js` (browser): `export function toHtml(text) -> string` (HTML with inline SVG math),
-  `export async function renderFace(text, {dpi=300}={}) -> Promise<string /* PNG data URL */>` (does auto-fit)
+  `export async function renderFace(text, {dpi=300, holeSide=null}={}) -> Promise<string /* PNG data URL */>` (does auto-fit; `holeSide`: `'left'`|`'right'`|`null`, default `null`),
+  `buildFace` also accepts option `holeSide` (`'left'`|`'right'`|`null`, default `null`)
 - `pdf.js`: `export async function buildCardsPdf(cards, renderFace, opts) -> Promise<Uint8Array>`
-  - `renderFace(text) -> Promise<dataURL>` is injected (so node tests can pass a dummy PNG).
+  - `renderFace(text, { holeSide }) -> Promise<dataURL>` is injected (so node tests can pass a dummy PNG).
+  - Options include `hole` (default `false`) and `holeGuide` (`'none'`|`'first'`|`'all'`, default `'none'`). Calls `renderFace(text, { holeSide })` with `holeSide` `null` when `hole` is `false`.
   - Page order: sheet1 front, sheet1 back, sheet2 front, ... (duplex printing order).
   - `export function buildCalibrationPdf(opts) -> Uint8Array`
   - Uses jsPDF with `unit: 'mm'`, `format: 'a4'`, PNG via `addImage`.
-- `main.js`: UI (file input, flip select, back offset X/Y inputs, crop marks checkbox, generate button,
+- `main.js`: UI (file input, flip select, back offset X/Y inputs, crop marks checkbox, hole checkbox, holeGuide select, generate button,
   calibration button, progress, error display). Japanese UI. Settings remembered in localStorage (try/catch).
 
 ## Tests
