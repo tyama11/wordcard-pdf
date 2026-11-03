@@ -336,13 +336,26 @@ export function toHtml(text) {
 
 /**
  * Build the off-screen card face element (not yet attached to the document).
- * Structure: card (91x55 mm, padding per facePadding(holeSide)) > box (content box, overflow checked) > content
+ * Structure: card (width x height mm, padding per facePadding(holeSide)) > box (content box, overflow checked) > content
  * and optional footer (.wordcard-error-note) when errors exist.
  * @param {string} text
- * @param {{errorNote?: boolean, holeSide?: 'left'|'right'|null}} [opts]
+ * @param {{
+ *   errorNote?: boolean,
+ *   holeSide?: 'left'|'right'|null,
+ *   cardWidthMm?: number,
+ *   cardHeightMm?: number
+ * }} [opts]
  * @returns {{card: HTMLDivElement, box: HTMLDivElement, note: HTMLDivElement | null}}
  */
-export function buildFace(text, { errorNote = true, holeSide = null } = {}) {
+export function buildFace(
+  text,
+  {
+    errorNote = true,
+    holeSide = null,
+    cardWidthMm = CARD_W_MM,
+    cardHeightMm = CARD_H_MM,
+  } = {}
+) {
   const pad = facePadding(holeSide);
   const card = document.createElement('div');
   card.className = 'wordcard-face';
@@ -350,8 +363,8 @@ export function buildFace(text, { errorNote = true, holeSide = null } = {}) {
     position: 'fixed',
     left: '-10000px',
     top: '0px',
-    width: `${FACE_WIDTH_PX}px`,
-    height: `${FACE_HEIGHT_PX}px`,
+    width: `${cardWidthMm * PX_PER_MM}px`,
+    height: `${cardHeightMm * PX_PER_MM}px`,
     paddingTop: `${pad.top * PX_PER_MM}px`,
     paddingRight: `${pad.right * PX_PER_MM}px`,
     paddingBottom: `${pad.bottom * PX_PER_MM}px`,
@@ -473,19 +486,41 @@ export function getLastFitInfo() {
 }
 
 /**
- * Render a card face (91 x 55 mm) to a PNG data URL: builds an off-screen element, auto-fits
+ * Render a card face to a PNG data URL: builds an off-screen element, auto-fits
  * the font size, waits for fonts, rasterizes with html2canvas-pro on a white background.
- * The image is exactly round(91/25.4*dpi) x round(55/25.4*dpi) px (1075 x 650 at 300 dpi).
+ * The image is exactly round(cardWidthMm/25.4*dpi) x round(cardHeightMm/25.4*dpi) px (1075 x 650 at default 300 dpi).
  * After it resolves, getLastFitInfo() describes the chosen font size.
  * @param {string} text cell text (plain text with embedded TeX)
- * @param {{dpi?: number, format?: 'png'|'jpeg'|'jpg', errorNote?: boolean, holeSide?: 'left'|'right'|null}} [opts]
+ * @param {{
+ *   dpi?: number,
+ *   format?: 'png'|'jpeg'|'jpg',
+ *   errorNote?: boolean,
+ *   holeSide?: 'left'|'right'|null,
+ *   cardWidthMm?: number,
+ *   cardHeightMm?: number
+ * }} [opts]
  * @returns {Promise<string>} PNG or JPEG data URL
  */
-export async function renderFace(text, { dpi = 300, format = 'png', errorNote = true, holeSide = null } = {}) {
-  const outW = Math.round((CARD_W_MM / MM_PER_IN) * dpi);
-  const outH = Math.round((CARD_H_MM / MM_PER_IN) * dpi);
+export async function renderFace(
+  text,
+  {
+    dpi = 300,
+    format = 'png',
+    errorNote = true,
+    holeSide = null,
+    cardWidthMm = CARD_W_MM,
+    cardHeightMm = CARD_H_MM,
+  } = {}
+) {
+  const outW = Math.round((cardWidthMm / MM_PER_IN) * dpi);
+  const outH = Math.round((cardHeightMm / MM_PER_IN) * dpi);
   const scale = dpi / CSS_DPI;
-  const { card, box, note } = buildFace(text, { errorNote, holeSide });
+  const { card, box, note } = buildFace(text, {
+    errorNote,
+    holeSide,
+    cardWidthMm,
+    cardHeightMm,
+  });
   document.body.appendChild(card);
   try {
     if (document.fonts && document.fonts.ready) await document.fonts.ready;

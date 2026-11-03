@@ -433,8 +433,8 @@ describe('pdf.js', () => {
     const pdf = await pdfjsLib.getDocument({ data: pdfBytes, standardFontDataUrl: STANDARD_FONTS_DIR }).promise;
 
     expect(renderFaceMock).toHaveBeenCalledTimes(2);
-    expect(renderFaceMock).toHaveBeenCalledWith('Hello', { holeSide: null });
-    expect(renderFaceMock).toHaveBeenCalledWith('World', { holeSide: null });
+    expect(renderFaceMock).toHaveBeenCalledWith('Hello', { holeSide: null, cardWidthMm: 91, cardHeightMm: 55 });
+    expect(renderFaceMock).toHaveBeenCalledWith('World', { holeSide: null, cardWidthMm: 91, cardHeightMm: 55 });
 
     const frontPage = await pdf.getPage(1);
     const backPage = await pdf.getPage(2);
