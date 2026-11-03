@@ -100,8 +100,8 @@ describe('hole-pdf.js', () => {
       await buildCardsPdf(cards, renderFace, { hole: true, flip: 'long' });
 
       expect(calls).toHaveLength(2);
-      expect(calls[0]).toEqual({ text: 'Card1 F', opts: { holeSide: 'left' } });
-      expect(calls[1]).toEqual({ text: 'Card1 B', opts: { holeSide: 'right' } });
+      expect(calls[0]).toEqual({ text: 'Card1 F', opts: { holeSide: 'left', cardWidthMm: 91, cardHeightMm: 55 } });
+      expect(calls[1]).toEqual({ text: 'Card1 B', opts: { holeSide: 'right', cardWidthMm: 91, cardHeightMm: 55 } });
     });
 
     it('passes { holeSide: "left" } for front and { holeSide: "left" } for back with hole: true and flip: "short"', async () => {
@@ -115,8 +115,8 @@ describe('hole-pdf.js', () => {
       await buildCardsPdf(cards, renderFace, { hole: true, flip: 'short' });
 
       expect(calls).toHaveLength(2);
-      expect(calls[0]).toEqual({ text: 'Card1 F', opts: { holeSide: 'left' } });
-      expect(calls[1]).toEqual({ text: 'Card1 B', opts: { holeSide: 'left' } });
+      expect(calls[0]).toEqual({ text: 'Card1 F', opts: { holeSide: 'left', cardWidthMm: 91, cardHeightMm: 55 } });
+      expect(calls[1]).toEqual({ text: 'Card1 B', opts: { holeSide: 'left', cardWidthMm: 91, cardHeightMm: 55 } });
     });
 
     it('passes { holeSide: null } for all faces when hole: false', async () => {
@@ -130,8 +130,8 @@ describe('hole-pdf.js', () => {
       await buildCardsPdf(cards, renderFaceLong, { hole: false, flip: 'long' });
 
       expect(callsLong).toHaveLength(2);
-      expect(callsLong[0]).toEqual({ text: 'F1', opts: { holeSide: null } });
-      expect(callsLong[1]).toEqual({ text: 'B1', opts: { holeSide: null } });
+      expect(callsLong[0]).toEqual({ text: 'F1', opts: { holeSide: null, cardWidthMm: 91, cardHeightMm: 55 } });
+      expect(callsLong[1]).toEqual({ text: 'B1', opts: { holeSide: null, cardWidthMm: 91, cardHeightMm: 55 } });
 
       const callsShort = [];
       const renderFaceShort = vi.fn(async (text, opts) => {
@@ -142,8 +142,8 @@ describe('hole-pdf.js', () => {
       await buildCardsPdf(cards, renderFaceShort, { hole: false, flip: 'short' });
 
       expect(callsShort).toHaveLength(2);
-      expect(callsShort[0]).toEqual({ text: 'F1', opts: { holeSide: null } });
-      expect(callsShort[1]).toEqual({ text: 'B1', opts: { holeSide: null } });
+      expect(callsShort[0]).toEqual({ text: 'F1', opts: { holeSide: null, cardWidthMm: 91, cardHeightMm: 55 } });
+      expect(callsShort[1]).toEqual({ text: 'B1', opts: { holeSide: null, cardWidthMm: 91, cardHeightMm: 55 } });
     });
 
     it('passes { holeSide: null } by default when hole option is omitted', async () => {
@@ -157,8 +157,8 @@ describe('hole-pdf.js', () => {
       await buildCardsPdf(cards, renderFace);
 
       expect(calls).toHaveLength(2);
-      expect(calls[0]).toEqual({ text: 'Default F', opts: { holeSide: null } });
-      expect(calls[1]).toEqual({ text: 'Default B', opts: { holeSide: null } });
+      expect(calls[0]).toEqual({ text: 'Default F', opts: { holeSide: null, cardWidthMm: 91, cardHeightMm: 55 } });
+      expect(calls[1]).toEqual({ text: 'Default B', opts: { holeSide: null, cardWidthMm: 91, cardHeightMm: 55 } });
     });
   });
 
