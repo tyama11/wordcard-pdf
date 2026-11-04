@@ -25,6 +25,13 @@ The application is structured as a clean, single-column workflow divided into lo
 - **Privacy Note / Notice**:
   - Exact text: `CSVはブラウザ内だけで処理され、どこにも送信されません`
   - Style: Badge or subtle callout box with a shield/lock icon emphasizing local client-side processing.
+- **Language Selector Menu (`#locale-select`)**:
+  - Element: `<select id="locale-select">` located in the header.
+  - Supported options: Japanese (`ja`), English (`en`), Spanish (`es`), Simplified Chinese (`zh-CN`), Traditional Chinese (`zh-TW`).
+  - Behavior:
+    - On first visit, automatically resolved from the browser language (`zh-Hant`, `zh-TW`, `zh-HK`, `zh-MO` map to Traditional Chinese; other `zh` map to Simplified Chinese; unsupported languages fall back to English; web crawlers/bots get Japanese).
+    - Selected locale is persisted in `localStorage` under key `wordcard_locale`.
+    - Switching locale dynamically re-translates all UI labels, dialogs, notices, and updates `document.title`, while preserving loaded card data, current settings, and inputs without reloading the page.
 
 ---
 
