@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { decodeBytes, parseCards } from '../../src/csv.js';
+import { decodeBytes, parseCards, hasHeaderRow } from '../../src/csv.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -283,6 +283,60 @@ describe('parseCards', () => {
         { front: 'one column only', back: '' },
         { front: 'extra', back: 'columns' },
       ]);
+    });
+  });
+
+  describe('hasHeaderRow', () => {
+    const headerVariants = [
+      ['front', 'back'],
+      ['表', '裏'],
+      ['表面', '裏面'],
+      ['question', 'answer'],
+      ['問題', '答え'],
+      ['word', 'meaning'],
+      ['単語', '意味'],
+    ];
+
+    for (const [hFront, hBack] of headerVariants) {
+      it(`detects header variant: ${hFront}|${hBack}`, () => {
+        expect(hasHeaderRow(`${hFront},${hBack}\ncard1,card2`)).toBe(true);
+      });
+
+      it(`handles case-insensitive and trimmed header: " ${hFront.toUpperCase()} "," ${hBack.toUpperCase()} "`, () => {
+        expect(hasHeaderRow(`" ${hFront.toUpperCase()} "," ${hBack.toUpperCase()} "\ncard1,card2`)).toBe(true);
+      });
+    }
+
+    it('detects header when extra columns are present', () => {
+      expect(hasHeaderRow('front,back,category,difficulty\ncard1,card2,vocab,easy')).toBe(true);
+    });
+
+    it('detects header in TSV format', () => {
+      expect(hasHeaderRow('front\tback\ncard1\tcard2')).toBe(true);
+      expect(hasHeaderRow('問題\t答え\r\n日本の首都は？\t東京')).toBe(true);
+    });
+
+    it('detects header after leading empty lines', () => {
+      expect(hasHeaderRow('\n\r\n   \nfront,back\ncard1,card2')).toBe(true);
+    });
+
+    it('returns false for data rows without header', () => {
+      expect(hasHeaderRow('cat,neko\ndog,inu')).toBe(false);
+    });
+
+    it('returns false when only 1 column is present even if matching header name', () => {
+      expect(hasHeaderRow('front\ncard1,card2')).toBe(false);
+    });
+
+    it('returns false for mismatched header pairs', () => {
+      expect(hasHeaderRow('front,meaning\ncard1,card2')).toBe(false);
+    });
+
+    it('returns false for empty, null, undefined, or whitespace-only inputs', () => {
+      expect(hasHeaderRow('')).toBe(false);
+      expect(hasHeaderRow(null)).toBe(false);
+      expect(hasHeaderRow(undefined)).toBe(false);
+      expect(hasHeaderRow('   \n\r\n   ')).toBe(false);
     });
   });
 });

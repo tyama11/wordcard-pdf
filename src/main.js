@@ -1,6 +1,5 @@
 import './style.css';
-import Papa from 'papaparse';
-import { decodeBytes, parseCards } from './csv.js';
+import { decodeBytes, parseCards, hasHeaderRow } from './csv.js';
 import { renderFace, findTexErrors } from './tex.js';
 import { normalizeInput } from './texsplit.js';
 import { buildCardsPdf, buildCalibrationPdf } from './pdf.js';
@@ -9,52 +8,8 @@ import {
   DEFAULT_CARDS_PER_SHEET,
   gridFor,
 } from './layout.js';
-
-const STORAGE_KEYS = {
-  cardsPerSheet: 'wordcard_cardsPerSheet',
-  flip: 'wordcard_flip',
-  backOffsetX: 'wordcard_backOffsetX',
-  backOffsetY: 'wordcard_backOffsetY',
-  cropMarks: 'wordcard_cropMarks',
-  hole: 'wordcard_hole',
-  holeGuide: 'wordcard_holeGuide',
-};
-
-const HEADER_PAIRS = [
-  ['front', 'back'],
-  ['表', '裏'],
-  ['表面', '裏面'],
-  ['question', 'answer'],
-  ['問題', '答え'],
-  ['word', 'meaning'],
-  ['単語', '意味'],
-];
-
-/**
- * Checks if raw CSV / TSV text begins with a recognized header row.
- * @param {string} rawText
- * @returns {boolean}
- */
-function detectCsvHeader(rawText) {
-  if (!rawText) return false;
-  const lines = rawText.split(/\r\n|\r|\n/);
-  const firstLine = lines[0] ?? '';
-  const firstNonEmpty = lines.find((line) => line.trim().length > 0) ?? '';
-  const isTsv =
-    (firstLine.includes('\t') && !firstLine.includes(',')) ||
-    (firstNonEmpty.includes('\t') && !firstNonEmpty.includes(','));
-  const delimiter = isTsv ? '\t' : ',';
-
-  const parsed = Papa.parse(rawText, { delimiter });
-  for (const row of parsed.data) {
-    if (!Array.isArray(row)) continue;
-    const f = (row[0] ?? '').trim().toLowerCase();
-    const b = (row[1] ?? '').trim().toLowerCase();
-    if (f === '' && b === '') continue;
-    return HEADER_PAIRS.some(([hf, hb]) => hf === f && hb === b);
-  }
-  return false;
-}
+import { drawCalibrationInstructions } from './calibration-text.js';
+import { readSettings, writeSettings, clampOffset } from './settings.js';
 
 /**
  * Format local timestamp as YYYYMMDD-HHmm.
@@ -68,16 +23,6 @@ function formatLocalTimestamp(date = new Date()) {
   const hh = String(date.getHours()).padStart(2, '0');
   const min = String(date.getMinutes()).padStart(2, '0');
   return `${yyyy}${mm}${dd}-${hh}${min}`;
-}
-
-/**
- * Clamps offset value to [-5.0, 5.0].
- * @param {number} val
- * @returns {number}
- */
-function clampOffset(val) {
-  if (isNaN(val)) return 0;
-  return Math.max(-5.0, Math.min(5.0, Math.round(val * 10) / 10));
 }
 
 /**
@@ -96,76 +41,6 @@ function triggerDownload(blob, filename) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, 1000);
-}
-
-/**
- * Renders Japanese instruction text for the calibration PDF sheet.
- * @param {import('jspdf').jsPDF} doc
- * @param {number} pageNumber
- * @param {'long'|'short'} flip
- */
-function drawCalibrationInstructions(doc, pageNumber, flip) {
-  const canvas = document.createElement('canvas');
-  const dpi = 300;
-  const mmToPx = dpi / 25.4;
-  const wMm = 140;
-  const hMm = 55;
-  canvas.width = Math.round(wMm * mmToPx);
-  canvas.height = Math.round(hMm * mmToPx);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-
-  // Background
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Border
-  ctx.strokeStyle = '#cbd5e1';
-  ctx.lineWidth = Math.round(0.5 * mmToPx);
-  ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
-
-  ctx.fillStyle = '#0f172a';
-  const fontFam = '"Hiragino Sans","Noto Sans JP","Yu Gothic","Meiryo",sans-serif';
-
-  if (pageNumber === 1) {
-    // Front page text: how to print (A4, 両面, 長辺/短辺 as selected, 実際のサイズ/100%)
-    ctx.font = `bold ${Math.round(4.0 * mmToPx)}px ${fontFam}`;
-    ctx.fillText('【位置合わせシートの印刷手順】', Math.round(8 * mmToPx), Math.round(12 * mmToPx));
-
-    ctx.font = `normal ${Math.round(3.3 * mmToPx)}px ${fontFam}`;
-    const lines = [
-      '・用紙サイズ: A4（タテ）',
-      `・両面印刷: 必ず両面印刷にし、「${flip === 'short' ? '短辺とじ' : '長辺とじ'}」を選択`,
-      '・印刷倍率: 「実際のサイズ」または「100%」（「用紙に合わせる」は必ずOFF）',
-      '・フチなし印刷: 必ずOFF（拡大されて位置がずれます）',
-    ];
-    let y = Math.round(20 * mmToPx);
-    for (const line of lines) {
-      ctx.fillText(line, Math.round(8 * mmToPx), y);
-      y += Math.round(7.2 * mmToPx);
-    }
-  } else {
-    // Back page text: how to read (光に透かす, 表の十字が裏の目盛りのどこに見えるか読む, その値を現在の補正値に足す, +X=右 +Y=下（裏面を見て）)
-    ctx.font = `bold ${Math.round(4.0 * mmToPx)}px ${fontFam}`;
-    ctx.fillText('【位置合わせ（ズレ補正）の手順】', Math.round(8 * mmToPx), Math.round(12 * mmToPx));
-
-    ctx.font = `normal ${Math.round(3.1 * mmToPx)}px ${fontFam}`;
-    const lines = [
-      '1. 印刷後、この裏面を手前にして明るい光に透かします。',
-      '2. 表面の十字線が、裏面の目盛り（+X/+Y）のどこに見えるかを読み取ります。',
-      '3. 読み取った数値を、画面の現在の補正値（裏面オフセット）に足してください。',
-      '   ・裏面を見て: +X は右へ、-X は左へ / +Y は下へ、-Y は上へ補正',
-    ];
-    let y = Math.round(19.5 * mmToPx);
-    for (const line of lines) {
-      ctx.fillText(line, Math.round(8 * mmToPx), y);
-      y += Math.round(6.8 * mmToPx);
-    }
-  }
-
-  const dataUrl = canvas.toDataURL('image/png');
-  // Placed at center column away from center crosshair (cy = 148.5) and top crosshairs (cy = 11)
-  doc.addImage(dataUrl, 'PNG', 35, 52, wMm, hMm);
 }
 
 // State
@@ -258,71 +133,54 @@ function updateHoleGuideState() {
 }
 
 /**
- * Load settings from localStorage wrapped in try/catch.
+ * Load settings from localStorage and apply to UI controls.
  */
 function loadSettings() {
-  try {
-    const savedCardsPerSheet = localStorage.getItem(STORAGE_KEYS.cardsPerSheet);
-    const parsedCardsPerSheet = parseInt(savedCardsPerSheet, 10);
-    if (CARDS_PER_SHEET_OPTIONS.includes(parsedCardsPerSheet)) {
-      cardsPerSheetSelect.value = String(parsedCardsPerSheet);
-    } else {
-      cardsPerSheetSelect.value = String(DEFAULT_CARDS_PER_SHEET);
-    }
+  const settings = readSettings();
 
-    const savedFlip = localStorage.getItem(STORAGE_KEYS.flip);
-    if (savedFlip === 'long' || savedFlip === 'short') {
-      flipSelect.value = savedFlip;
-    }
+  cardsPerSheetSelect.value = String(settings.cardsPerSheet);
 
-    const savedX = localStorage.getItem(STORAGE_KEYS.backOffsetX);
-    if (savedX !== null) {
-      const val = parseFloat(savedX);
-      if (!isNaN(val)) offsetXInput.value = clampOffset(val).toFixed(1);
-    }
-
-    const savedY = localStorage.getItem(STORAGE_KEYS.backOffsetY);
-    if (savedY !== null) {
-      const val = parseFloat(savedY);
-      if (!isNaN(val)) offsetYInput.value = clampOffset(val).toFixed(1);
-    }
-
-    const savedCropMarks = localStorage.getItem(STORAGE_KEYS.cropMarks);
-    if (savedCropMarks !== null) {
-      cropMarksCheckbox.checked = savedCropMarks === 'true';
-    }
-
-    const savedHole = localStorage.getItem(STORAGE_KEYS.hole);
-    if (savedHole !== null) {
-      holeCheckbox.checked = savedHole === 'true';
-    }
-
-    const savedHoleGuide = localStorage.getItem(STORAGE_KEYS.holeGuide);
-    if (savedHoleGuide === 'none' || savedHoleGuide === 'first' || savedHoleGuide === 'all') {
-      holeGuideSelect.value = savedHoleGuide;
-    }
-  } catch (e) {
-    console.warn('localStorage is unavailable:', e);
+  if (settings.flip !== null) {
+    flipSelect.value = settings.flip;
   }
+
+  if (settings.backOffsetX !== null) {
+    offsetXInput.value = settings.backOffsetX.toFixed(1);
+  }
+
+  if (settings.backOffsetY !== null) {
+    offsetYInput.value = settings.backOffsetY.toFixed(1);
+  }
+
+  if (settings.cropMarks !== null) {
+    cropMarksCheckbox.checked = settings.cropMarks;
+  }
+
+  if (settings.hole !== null) {
+    holeCheckbox.checked = settings.hole;
+  }
+
+  if (settings.holeGuide !== null) {
+    holeGuideSelect.value = settings.holeGuide;
+  }
+
   updateHoleGuideState();
   updateDuplexNotice();
 }
 
 /**
- * Save settings to localStorage wrapped in try/catch.
+ * Save current UI settings to localStorage.
  */
 function saveSettings() {
-  try {
-    localStorage.setItem(STORAGE_KEYS.cardsPerSheet, cardsPerSheetSelect.value);
-    localStorage.setItem(STORAGE_KEYS.flip, flipSelect.value);
-    localStorage.setItem(STORAGE_KEYS.backOffsetX, offsetXInput.value);
-    localStorage.setItem(STORAGE_KEYS.backOffsetY, offsetYInput.value);
-    localStorage.setItem(STORAGE_KEYS.cropMarks, String(cropMarksCheckbox.checked));
-    localStorage.setItem(STORAGE_KEYS.hole, String(holeCheckbox.checked));
-    localStorage.setItem(STORAGE_KEYS.holeGuide, holeGuideSelect.value);
-  } catch (e) {
-    console.warn('Failed to save to localStorage:', e);
-  }
+  writeSettings({
+    cardsPerSheet: cardsPerSheetSelect.value,
+    flip: flipSelect.value,
+    backOffsetX: offsetXInput.value,
+    backOffsetY: offsetYInput.value,
+    cropMarks: cropMarksCheckbox.checked,
+    hole: holeCheckbox.checked,
+    holeGuide: holeGuideSelect.value,
+  });
   updateDuplexNotice();
 }
 
@@ -443,7 +301,7 @@ function processCsvText(rawText) {
     return;
   }
 
-  hasDetectedHeader = detectCsvHeader(rawText);
+  hasDetectedHeader = hasHeaderRow(rawText);
   const cards = parseCards(rawText);
 
   if (!cards || cards.length === 0) {
@@ -623,6 +481,26 @@ function openConfirmDialog() {
 }
 
 /**
+ * Enables or disables UI controls during PDF generation.
+ * @param {boolean} disabled
+ */
+function setControlsDisabled(disabled) {
+  generateBtn.disabled = disabled;
+  cardsPerSheetSelect.disabled = disabled;
+  flipSelect.disabled = disabled;
+  offsetXInput.disabled = disabled;
+  offsetYInput.disabled = disabled;
+  cropMarksCheckbox.disabled = disabled;
+  holeCheckbox.disabled = disabled;
+  if (disabled) {
+    holeGuideSelect.disabled = true;
+  } else {
+    updateHoleGuideState();
+  }
+  calibrationBtn.disabled = disabled;
+}
+
+/**
  * Generates and downloads the PDF from loaded cards.
  */
 async function generatePdf() {
@@ -636,15 +514,7 @@ async function generatePdf() {
   const holeGuide = holeGuideSelect.value;
   const cardsPerSheet = getSelectedCardsPerSheet();
 
-  generateBtn.disabled = true;
-  cardsPerSheetSelect.disabled = true;
-  flipSelect.disabled = true;
-  offsetXInput.disabled = true;
-  offsetYInput.disabled = true;
-  cropMarksCheckbox.disabled = true;
-  holeCheckbox.disabled = true;
-  holeGuideSelect.disabled = true;
-  calibrationBtn.disabled = true;
+  setControlsDisabled(true);
   printNotice.hidden = true;
 
   progressContainer.hidden = false;
@@ -684,15 +554,7 @@ async function generatePdf() {
     console.error('PDF generation error:', err);
     renderAlerts({ error: 'PDFの作成中にエラーが発生しました。' });
   } finally {
-    generateBtn.disabled = false;
-    cardsPerSheetSelect.disabled = false;
-    flipSelect.disabled = false;
-    offsetXInput.disabled = false;
-    offsetYInput.disabled = false;
-    cropMarksCheckbox.disabled = false;
-    holeCheckbox.disabled = false;
-    updateHoleGuideState();
-    calibrationBtn.disabled = false;
+    setControlsDisabled(false);
   }
 }
 
