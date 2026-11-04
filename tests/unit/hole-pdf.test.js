@@ -1,15 +1,8 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, it, expect, vi } from 'vitest';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { buildCardsPdf } from '../../src/pdf.js';
 import { holeCenter, HOLE } from '../../src/layout.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURE_PNG_PATH = path.resolve(__dirname, '../fixtures/tiny.png');
-const DUMMY_PNG_DATA_URL = `data:image/png;base64,${fs.readFileSync(FIXTURE_PNG_PATH).toString('base64')}`;
-const STANDARD_FONTS_DIR = path.resolve('node_modules/pdfjs-dist/standard_fonts/') + '/';
+import { loadPdf, DUMMY_PNG_DATA_URL } from '../helpers/pdf.js';
 
 /**
  * Approach for detecting hole punch guides from the PDF operator list:
@@ -175,10 +168,7 @@ describe('hole-pdf.js', () => {
         holeGuide: 'first',
       });
 
-      const pdf = await pdfjsLib.getDocument({
-        data: pdfBytes,
-        standardFontDataUrl: STANDARD_FONTS_DIR,
-      }).promise;
+      const pdf = await loadPdf(pdfBytes);
 
       expect(pdf.numPages).toBe(4);
 
@@ -224,10 +214,7 @@ describe('hole-pdf.js', () => {
         holeGuide: 'all',
       });
 
-      const pdf = await pdfjsLib.getDocument({
-        data: pdfBytes,
-        standardFontDataUrl: STANDARD_FONTS_DIR,
-      }).promise;
+      const pdf = await loadPdf(pdfBytes);
 
       expect(pdf.numPages).toBe(4);
 
@@ -277,10 +264,7 @@ describe('hole-pdf.js', () => {
         holeGuide: 'none',
       });
 
-      const pdf = await pdfjsLib.getDocument({
-        data: pdfBytes,
-        standardFontDataUrl: STANDARD_FONTS_DIR,
-      }).promise;
+      const pdf = await loadPdf(pdfBytes);
 
       for (let p = 1; p <= 4; p++) {
         const page = await pdf.getPage(p);
@@ -297,10 +281,7 @@ describe('hole-pdf.js', () => {
         holeGuide: 'all',
       });
 
-      const pdf = await pdfjsLib.getDocument({
-        data: pdfBytes,
-        standardFontDataUrl: STANDARD_FONTS_DIR,
-      }).promise;
+      const pdf = await loadPdf(pdfBytes);
 
       for (let p = 1; p <= 4; p++) {
         const page = await pdf.getPage(p);
@@ -317,10 +298,7 @@ describe('hole-pdf.js', () => {
         holeGuide: 'all',
       });
 
-      const pdf = await pdfjsLib.getDocument({
-        data: pdfBytes,
-        standardFontDataUrl: STANDARD_FONTS_DIR,
-      }).promise;
+      const pdf = await loadPdf(pdfBytes);
 
       const page1 = await pdf.getPage(1);
       const ops1 = await page1.getOperatorList();
