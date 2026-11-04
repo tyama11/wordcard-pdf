@@ -84,6 +84,32 @@ Section `#ai-guide` directly under the header (above Step 1) explains that a pho
 - On copy failure (e.g., clipboard permissions), an error message is shown and the details accordion `#ai-prompt-details` opens automatically.
 - Privacy: The photo is sent only to the external AI service chosen by the user; `wordcard-pdf` itself sends no data.
 
+## Internationalization (i18n)
+
+- **Supported Locales**: Japanese (`ja`), English (`en`), Spanish (`es`), Simplified Chinese (`zh-CN`), Traditional Chinese (`zh-TW`). Translations are AI-generated.
+- **Initial Locale Detection**:
+  - Chosen from the browser language (`navigator.languages` / `navigator.language`).
+  - `zh-Hant`, `zh-TW`, `zh-HK`, and `zh-MO` map to Traditional Chinese (`zh-TW`). Other `zh` prefixes map to Simplified Chinese (`zh-CN`).
+  - Unsupported languages fall back to English (`en`).
+  - Web crawlers / bot user agents receive Japanese (`ja`).
+- **Persistence & Switching**:
+  - Selected via header dropdown (`#locale-select`).
+  - Saved in `localStorage` under key `wordcard_locale`.
+  - Switching locale updates UI text dynamically while keeping loaded cards, parse state, and print settings intact.
+- **SEO & Single URL**:
+  - Single URL architecture. Static HTML, initial `<title>`, and `<meta name="description">` remain in Japanese (search engine results are primarily Japanese).
+  - After load, `document.title` is updated to follow the active locale.
+- **Translation Coverage**:
+  - All UI labels, buttons, errors, alerts, and dialogs.
+  - Collapsible math cheat sheet.
+  - Calibration sheet instructions PDF.
+  - Card footer note for TeX errors (`⚠ 数式エラー`).
+  - AI CSV prompt (`AI_CSV_PROMPT`), where non-Japanese prompts request CSV headers `front,back`.
+- **Message Dictionary & Fallback**:
+  - Message dictionaries located in `src/locales/<locale>.js` with flat dot-separated keys.
+  - `ja` serves as the fallback locale.
+  - Unit test verifies that every locale dictionary has the identical set of keys and placeholders.
+
 ## CSV
 
 - Column 1 = front text, column 2 = back text. Extra columns ignored. Empty rows skipped.
@@ -126,6 +152,11 @@ Rendering: MathJax v4 (`@mathjax/src`) TeX input with the `mhchem` package, SVG 
   - `export function cropMarkLines() -> [{x1,y1,x2,y2}]` (front coordinates)
 - `csv.js` (pure): `export function decodeBytes(Uint8Array) -> string`, `export function parseCards(text) -> [{front, back}]`
 - `settings.js`: `readSettings()`, `writeSettings(values)`, `clampOffset(val)`, `STORAGE_KEYS`. Owns localStorage access and validation.
+- `i18n.js`:
+  - `export const LOCALES`, `LOCALE_NAMES`.
+  - `export function detectLocale()`, `resolveInitialLocale()`, `getLocale()`, `setLocale(locale)`, `onLocaleChange(callback)`.
+  - `export function t(key, params)` (returns translated string for flat dot-separated keys with `ja` fallback), `applyTranslations()`.
+  - Locale messages defined in `src/locales/<locale>.js`.
 - `calibration-text.js`: `drawCalibrationInstructions(doc, pageNumber, flip)` draws the instruction text on the calibration sheet.
 - `ai-guide.js`: `export const AI_CSV_PROMPT` prompt text for instructing AI to convert photo of notes/vocabulary to CSV.
 - `tex.js` (browser): `export function toHtml(text) -> string` (HTML with inline SVG math),

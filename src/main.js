@@ -1,6 +1,6 @@
 import './style.css';
 import { decodeBytes, parseCards, hasHeaderRow, pdfFilenameFor } from './csv.js';
-import { renderFace, findTexErrors } from './tex.js';
+import { renderFace, findTexErrors, explainTexErrorLocalized } from './tex.js';
 import { normalizeInput } from './texsplit.js';
 import { buildCardsPdf, buildCalibrationPdf } from './pdf.js';
 import {
@@ -10,6 +10,16 @@ import {
 } from './layout.js';
 import { drawCalibrationInstructions } from './calibration-text.js';
 import { readSettings, writeSettings, clampOffset } from './settings.js';
+import {
+  LOCALES,
+  LOCALE_NAMES,
+  resolveInitialLocale,
+  getLocale,
+  setLocale,
+  onLocaleChange,
+  t,
+  applyTranslations,
+} from './i18n.js';
 
 /**
  * Downloads a Blob as a file in browser.
@@ -35,8 +45,11 @@ let hasDetectedHeader = false;
 let loadedFileName = '';
 let currentTexErrors = [];
 let isProceedingWithGeneration = false;
+let currentAlerts = null;
+let currentProgress = null;
 
 // DOM Elements
+const localeSelect = document.getElementById('locale-select');
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 const browseBtn = document.getElementById('browse-btn');
@@ -68,10 +81,27 @@ const printNotice = document.getElementById('print-notice');
 const duplexNoticeText = document.getElementById('duplex-notice-text');
 
 /**
+ * Initializes and populates the locale select element with supported language names.
+ */
+function initLocaleSelect() {
+  if (!localeSelect) return;
+  localeSelect.innerHTML = '';
+  for (const loc of LOCALES) {
+    const opt = document.createElement('option');
+    opt.value = loc;
+    opt.textContent = LOCALE_NAMES[loc];
+    localeSelect.appendChild(opt);
+  }
+  localeSelect.value = getLocale();
+}
+
+/**
  * Populates the cards-per-sheet select element using CARDS_PER_SHEET_OPTIONS and gridFor.
+ * Preserves the currently selected value.
  */
 function initCardsPerSheetSelect() {
   if (!cardsPerSheetSelect) return;
+  const currentVal = cardsPerSheetSelect.value || String(DEFAULT_CARDS_PER_SHEET);
   cardsPerSheetSelect.innerHTML = '';
   for (const n of CARDS_PER_SHEET_OPTIONS) {
     const grid = gridFor(n);
@@ -79,12 +109,19 @@ function initCardsPerSheetSelect() {
     opt.value = String(n);
     const w = Math.round(grid.cardWidth);
     const h = Math.round(grid.cardHeight);
-    opt.textContent = `${n}枚（${grid.cols}列×${grid.rows}行・${w}×${h}mm）`;
-    if (n === DEFAULT_CARDS_PER_SHEET) {
+    opt.textContent = t('settings.cardsPerSheetOption', {
+      n,
+      cols: grid.cols,
+      rows: grid.rows,
+      w,
+      h,
+    });
+    if (String(n) === currentVal) {
       opt.selected = true;
     }
     cardsPerSheetSelect.appendChild(opt);
   }
+  cardsPerSheetSelect.value = currentVal;
 }
 
 /**
@@ -106,7 +143,10 @@ function updateSummary() {
   }
   const perSheet = getSelectedCardsPerSheet();
   const sheetCount = Math.ceil(loadedCards.length / perSheet);
-  cardSummary.textContent = `${loadedCards.length}枚のカード（A4 ${sheetCount}枚・両面）`;
+  cardSummary.textContent = t('summary.cardCount', {
+    count: loadedCards.length,
+    sheets: sheetCount,
+  });
   summaryContainer.hidden = false;
 }
 
@@ -174,31 +214,44 @@ function saveSettings() {
 function updateDuplexNotice() {
   if (duplexNoticeText) {
     if (flipSelect.value === 'short') {
-      duplexNoticeText.textContent = '「両面印刷・短辺とじ」に設定してください。';
+      duplexNoticeText.textContent = t('print.duplexShort');
     } else {
-      duplexNoticeText.textContent = '「両面印刷・長辺とじ」に設定してください。';
+      duplexNoticeText.textContent = t('print.duplexLong');
     }
   }
 }
 
+function updateLargeFileWarning() {
+  if (loadedCards.length > 1000) {
+    largeFileWarning.className = 'alert-box alert-warning';
+    largeFileWarning.textContent = t('alert.largeFile', { count: loadedCards.length });
+    largeFileWarning.hidden = false;
+  } else {
+    largeFileWarning.className = 'alert-box';
+    largeFileWarning.hidden = true;
+  }
+}
+
 /**
- * Render error/warning alerts in the UI.
- * @param {{ error?: string, warnings?: Array<{row: number, side: '表面'|'裏面', source: string, ja: string}>, info?: string }} alerts
+ * Render error/warning alerts in the UI using currentAlerts state.
  */
-function renderAlerts({ error, warnings = [], info } = {}) {
+function renderCurrentAlerts() {
   alertContainer.innerHTML = '';
+  if (!currentAlerts) return;
+
+  const { error, info, warnings = [] } = currentAlerts;
 
   if (error) {
     const errBox = document.createElement('div');
     errBox.className = 'alert-box alert-error';
-    errBox.textContent = error;
+    errBox.textContent = t(error.key, error.params);
     alertContainer.appendChild(errBox);
   }
 
   if (info) {
     const infoBox = document.createElement('div');
     infoBox.className = 'alert-box alert-info';
-    infoBox.textContent = info;
+    infoBox.textContent = t(info.key, info.params);
     alertContainer.appendChild(infoBox);
   }
 
@@ -209,14 +262,21 @@ function renderAlerts({ error, warnings = [], info } = {}) {
     const title = document.createElement('p');
     title.style.margin = '0 0 6px';
     title.style.fontWeight = 'bold';
-    title.textContent = `数式記法エラー: ${warnings.length}件の無効なTeX記法が含まれていますが、PDFはそのまま生成されます。`;
+    title.textContent = t('alert.texWarningTitle', { count: warnings.length });
     warnBox.appendChild(title);
 
     const ul = document.createElement('ul');
     const shown = warnings.slice(0, 10);
     for (const item of shown) {
       const li = document.createElement('li');
-      li.textContent = `${item.row}行目・${item.side}：${item.source} — ${item.ja}`;
+      const side = t(item.sideKey);
+      const explanation = explainTexErrorLocalized(item.message);
+      li.textContent = t('alert.texWarningItem', {
+        row: item.row,
+        side,
+        source: item.source,
+        explanation,
+      });
       ul.appendChild(li);
     }
     warnBox.appendChild(ul);
@@ -225,7 +285,7 @@ function renderAlerts({ error, warnings = [], info } = {}) {
       const more = document.createElement('p');
       more.style.margin = '6px 0 0';
       more.style.fontSize = '0.85rem';
-      more.textContent = `ほか${warnings.length - 10}件`;
+      more.textContent = t('alert.moreItems', { count: warnings.length - 10 });
       warnBox.appendChild(more);
     }
 
@@ -234,10 +294,19 @@ function renderAlerts({ error, warnings = [], info } = {}) {
 }
 
 /**
+ * Updates alerts state and re-renders alert container.
+ * @param {{ error?: { key: string, params?: Record<string, any> }, info?: { key: string, params?: Record<string, any> }, warnings?: Array<any> }} [alerts]
+ */
+function setAlerts(alerts) {
+  currentAlerts = alerts || null;
+  renderCurrentAlerts();
+}
+
+/**
  * Validate TeX expressions across all loaded cards.
  * @param {Array<{front: string, back: string}>} cards
  * @param {boolean} hasHeader
- * @returns {Array<{row: number, side: '表面'|'裏面', source: string, ja: string}>}
+ * @returns {Array<{row: number, sideKey: string, side: string, source: string, message: string, ja: string}>}
  */
 function validateCardsTex(cards, hasHeader) {
   const entries = [];
@@ -252,8 +321,10 @@ function validateCardsTex(cards, hasHeader) {
     for (const err of frontErrors) {
       entries.push({
         row,
-        side: '表面',
+        sideKey: 'csv.sideFront',
+        side: 'front',
         source: err.source,
+        message: err.message,
         ja: err.ja,
       });
     }
@@ -263,8 +334,10 @@ function validateCardsTex(cards, hasHeader) {
     for (const err of backErrors) {
       entries.push({
         row,
-        side: '裏面',
+        sideKey: 'csv.sideBack',
+        side: 'back',
         source: err.source,
+        message: err.message,
         ja: err.ja,
       });
     }
@@ -284,7 +357,7 @@ function processCsvText(rawText) {
     generateBtn.disabled = true;
     summaryContainer.hidden = true;
     largeFileWarning.hidden = true;
-    renderAlerts({ error: 'CSVファイルに有効なデータが含まれていません。1行以上の単語ペアを入力してください。' });
+    setAlerts({ error: { key: 'alert.emptyCsv' } });
     return;
   }
 
@@ -297,7 +370,7 @@ function processCsvText(rawText) {
     generateBtn.disabled = true;
     summaryContainer.hidden = true;
     largeFileWarning.hidden = true;
-    renderAlerts({ error: 'CSVファイルに有効なデータが含まれていません。1行以上の単語ペアを入力してください。' });
+    setAlerts({ error: { key: 'alert.emptyCsv' } });
     return;
   }
 
@@ -316,23 +389,13 @@ function processCsvText(rawText) {
   loadedCards = cards;
   generateBtn.disabled = false;
 
-  // Summary display per UI.md: ◯枚のカード（A4 ◯枚・両面）
   updateSummary();
-
-  // Large CSV warning (> 1000 cards)
-  if (cards.length > 1000) {
-    largeFileWarning.className = 'alert-box alert-warning';
-    largeFileWarning.textContent = `カード数が1,000枚を超えているため（${cards.length}枚）、PDF生成に数分かかる場合があります。ブラウザを閉じずにお待ちください。`;
-    largeFileWarning.hidden = false;
-  } else {
-    largeFileWarning.className = 'alert-box';
-    largeFileWarning.hidden = true;
-  }
+  updateLargeFileWarning();
 
   // TeX error check
   currentTexErrors = validateCardsTex(cards, hasDetectedHeader);
-  renderAlerts({
-    info: yenCount > 0 ? `円記号（¥）をバックスラッシュ（\\）として読み替えました：${yenCount}か所` : undefined,
+  setAlerts({
+    info: yenCount > 0 ? { key: 'alert.yenReplaced', params: { count: yenCount } } : undefined,
     warnings: currentTexErrors,
   });
 }
@@ -355,7 +418,7 @@ async function handleFile(file) {
     loadedCards = [];
     generateBtn.disabled = true;
     summaryContainer.hidden = true;
-    renderAlerts({ error: 'ファイルを読み込めませんでした。文字コード（UTF-8 または Shift_JIS）およびファイル形式をご確認ください。' });
+    setAlerts({ error: { key: 'alert.readFailed' } });
   }
 }
 
@@ -438,10 +501,10 @@ calibrationBtn.addEventListener('click', () => {
 });
 
 /**
- * Opens pre-generation confirmation dialog listing all TeX syntax errors.
+ * Re-renders pre-generation confirmation dialog items.
  */
-function openConfirmDialog() {
-  confirmDialogTitle.textContent = `数式の書き方に誤りが${currentTexErrors.length}件あります`;
+function renderConfirmDialogList() {
+  confirmDialogTitle.textContent = t('dialog.title', { count: currentTexErrors.length });
   confirmDialogList.innerHTML = '';
 
   for (const err of currentTexErrors) {
@@ -450,20 +513,28 @@ function openConfirmDialog() {
     item.style.marginBottom = '6px';
 
     const rowSide = document.createElement('span');
-    rowSide.textContent = `${err.row}行目・${err.side}：`;
+    const side = t(err.sideKey);
+    rowSide.textContent = t('dialog.rowSide', { row: err.row, side });
 
     const code = document.createElement('code');
     code.textContent = err.source;
 
     const ja = document.createElement('span');
-    ja.textContent = ` — ${err.ja}`;
+    const explanation = explainTexErrorLocalized(err.message);
+    ja.textContent = ` — ${explanation}`;
 
     item.appendChild(rowSide);
     item.appendChild(code);
     item.appendChild(ja);
     confirmDialogList.appendChild(item);
   }
+}
 
+/**
+ * Opens pre-generation confirmation dialog listing all TeX syntax errors.
+ */
+function openConfirmDialog() {
+  renderConfirmDialogList();
   confirmDialog.showModal();
   dialogCancelBtn.focus();
 }
@@ -508,7 +579,8 @@ async function generatePdf() {
   progressContainer.hidden = false;
   progressBar.value = 0;
   progressBar.max = loadedCards.length * 2;
-  progressText.textContent = `0 / ${loadedCards.length * 2} 面を作成中`;
+  currentProgress = { done: 0, total: loadedCards.length * 2 };
+  progressText.textContent = t('progress.creating', currentProgress);
 
   try {
     const renderFaceWithYield = async (text, faceOpts) => {
@@ -528,7 +600,8 @@ async function generatePdf() {
       onProgress: (done, total) => {
         progressBar.max = total;
         progressBar.value = done;
-        progressText.textContent = `${done} / ${total} 面を作成中`;
+        currentProgress = { done, total };
+        progressText.textContent = t('progress.creating', currentProgress);
       },
     });
 
@@ -539,7 +612,7 @@ async function generatePdf() {
     printNotice.hidden = false;
   } catch (err) {
     console.error('PDF generation error:', err);
-    renderAlerts({ error: 'PDFの作成中にエラーが発生しました。' });
+    setAlerts({ error: { key: 'alert.pdfFailed' } });
   } finally {
     setControlsDisabled(false);
   }
@@ -576,6 +649,45 @@ confirmDialog.addEventListener('close', () => {
   isProceedingWithGeneration = false;
 });
 
-// Initialize settings
-initCardsPerSheetSelect();
-loadSettings();
+if (localeSelect) {
+  localeSelect.addEventListener('change', (e) => {
+    setLocale(e.target.value);
+  });
+}
+
+// Locale change reaction
+onLocaleChange(() => {
+  if (localeSelect && localeSelect.value !== getLocale()) {
+    localeSelect.value = getLocale();
+  }
+  applyTranslations();
+  document.title = t('meta.title');
+
+  initCardsPerSheetSelect();
+  updateSummary();
+  updateDuplexNotice();
+  updateLargeFileWarning();
+  renderCurrentAlerts();
+
+  if (confirmDialog && confirmDialog.open) {
+    renderConfirmDialogList();
+  }
+
+  if (currentProgress && !progressContainer.hidden) {
+    progressText.textContent = t('progress.creating', currentProgress);
+  }
+});
+
+// Single place startup initialization
+function initApp() {
+  const initialLocale = resolveInitialLocale();
+  setLocale(initialLocale, { persist: false });
+  initLocaleSelect();
+  applyTranslations();
+  document.title = t('meta.title');
+
+  initCardsPerSheetSelect();
+  loadSettings();
+}
+
+initApp();
