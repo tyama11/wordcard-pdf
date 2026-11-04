@@ -33,7 +33,7 @@ async function generateAndLoadPdf(page) {
     await proceedBtn.click();
   }
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/^wordcards-\d{8}-\d{4}\.pdf$/);
+  expect(download.suggestedFilename()).toMatch(/^cards\d+\.pdf$/);
 
   const downloadPath = await download.path();
   const pdfBytes = fs.readFileSync(downloadPath);

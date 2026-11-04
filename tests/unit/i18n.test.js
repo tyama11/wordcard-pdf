@@ -62,8 +62,14 @@ describe('t() translation function', () => {
   });
 
   it('falls back to ja when current locale lacks the key', () => {
-    setLocale('en');
-    expect(t('step1.browse')).toBe('ファイルを選択');
+    const original = en['step1.browse'];
+    delete en['step1.browse'];
+    try {
+      setLocale('en');
+      expect(t('step1.browse')).toBe('ファイルを選択');
+    } finally {
+      en['step1.browse'] = original;
+    }
   });
 
   it('returns key itself when key is missing from current locale and ja fallback', () => {
