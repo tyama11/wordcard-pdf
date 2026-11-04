@@ -125,6 +125,8 @@ Rendering: MathJax v4 (`@mathjax/src`) TeX input with the `mhchem` package, SVG 
   - `export function paginate(n) -> [{sheet, slot, index}]` for card indices 0..n-1
   - `export function cropMarkLines() -> [{x1,y1,x2,y2}]` (front coordinates)
 - `csv.js` (pure): `export function decodeBytes(Uint8Array) -> string`, `export function parseCards(text) -> [{front, back}]`
+- `settings.js`: `readSettings()`, `writeSettings(values)`, `clampOffset(val)`, `STORAGE_KEYS`. Owns localStorage access and validation.
+- `calibration-text.js`: `drawCalibrationInstructions(doc, pageNumber, flip)` draws the instruction text on the calibration sheet.
 - `ai-guide.js`: `export const AI_CSV_PROMPT` prompt text for instructing AI to convert photo of notes/vocabulary to CSV.
 - `tex.js` (browser): `export function toHtml(text) -> string` (HTML with inline SVG math),
   `export async function renderFace(text, {dpi=300, holeSide=null, cardWidthMm, cardHeightMm}={}) -> Promise<string /* PNG data URL */>` (does auto-fit; `holeSide`: `'left'`|`'right'`|`null`, default `null`),

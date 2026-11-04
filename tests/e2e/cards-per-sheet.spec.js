@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {
   CARDS_PER_SHEET_OPTIONS,
   DEFAULT_CARDS_PER_SHEET,
@@ -9,46 +8,8 @@ import {
   frontRect,
   backRect,
 } from '../../src/layout.js';
+import { loadPdf, extractPageImages } from '../helpers/pdf.js';
 
-const STANDARD_FONTS_DIR = path.resolve('node_modules/pdfjs-dist/standard_fonts/') + '/';
-
-/**
- * Extracts painted image rects { x, y, w, h } in top-left mm coordinates
- * from a pdfjs page by tracking save/restore/transform operations on the CTM.
- */
-async function extractPageImages(page) {
-  const ops = await page.getOperatorList();
-  const k = 72 / 25.4;
-  const pageHeightPt = page.view[3];
-  let ctm = [1, 0, 0, 1, 0, 0];
-  const stack = [];
-  const images = [];
-
-  for (let i = 0; i < ops.fnArray.length; i++) {
-    const fn = ops.fnArray[i];
-    const args = ops.argsArray[i];
-
-    if (fn === pdfjsLib.OPS.save) {
-      stack.push([...ctm]);
-    } else if (fn === pdfjsLib.OPS.restore) {
-      ctm = stack.pop() ?? [1, 0, 0, 1, 0, 0];
-    } else if (fn === pdfjsLib.OPS.transform) {
-      ctm = pdfjsLib.Util.transform(ctm, args);
-    } else if (
-      fn === pdfjsLib.OPS.paintImageXObject ||
-      fn === pdfjsLib.OPS.paintInlineImageXObject
-    ) {
-      const [a, b, c, d, e, f] = ctm;
-      const x = e / k;
-      const y = (pageHeightPt - (f + d)) / k;
-      const w = a / k;
-      const h = d / k;
-      images.push({ x, y, w, h });
-    }
-  }
-
-  return images;
-}
 
 /**
  * Generates CSV content with `n` word pairs.
@@ -76,10 +37,7 @@ async function generateAndLoadPdf(page) {
 
   const downloadPath = await download.path();
   const pdfBytes = fs.readFileSync(downloadPath);
-  return pdfjsLib.getDocument({
-    data: new Uint8Array(pdfBytes),
-    standardFontDataUrl: STANDARD_FONTS_DIR,
-  }).promise;
+  return loadPdf(pdfBytes);
 }
 
 /**

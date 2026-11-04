@@ -37,6 +37,47 @@ function isHeaderPair(front, back) {
 }
 
 /**
+ * Checks if raw CSV or TSV text begins with a recognized header row.
+ *
+ * @param {string} rawText - Raw CSV or TSV string.
+ * @returns {boolean} True if matching a recognized header row.
+ */
+export function hasHeaderRow(rawText) {
+  if (typeof rawText !== 'string' || !rawText) {
+    return false;
+  }
+
+  const lines = rawText.split(/\r\n|\r|\n/);
+  const firstLine = lines[0] ?? '';
+  const firstNonEmpty = lines.find((line) => line.trim().length > 0) ?? '';
+  const isTsv =
+    (firstLine.includes('\t') && !firstLine.includes(',')) ||
+    (firstNonEmpty.includes('\t') && !firstNonEmpty.includes(','));
+  const delimiter = isTsv ? '\t' : ',';
+
+  const parsed = Papa.parse(rawText, {
+    delimiter,
+  });
+
+  for (const row of parsed.data) {
+    if (!Array.isArray(row)) {
+      continue;
+    }
+
+    const front = normalizeCell(row[0]);
+    const back = normalizeCell(row[1]);
+
+    if (front === '' && back === '') {
+      continue;
+    }
+
+    return isHeaderPair(front, back);
+  }
+
+  return false;
+}
+
+/**
  * Decodes a byte buffer into a string, stripping UTF-8 BOM if present,
  * and falling back to Shift_JIS if UTF-8 decoding produces replacement characters (U+FFFD).
  *
