@@ -10,34 +10,12 @@ export const PAGE = {
   h: 297,
 };
 
-export const CARD = {
-  width: 91,
-  height: 55,
-  w: 91,
-  h: 55,
-};
-
-export const GRID = {
-  cols: 2,
-  rows: 5,
-  cardsPerSheet: 10,
+const GRID_AREA = {
   marginLeft: 14,
   marginTop: 11,
   width: 182,
   height: 275,
-  w: 182,
-  h: 275,
-  x: 14,
-  y: 11,
 };
-
-export const HOLE = { diameter: 6, centerFromEdge: 8, clearance: 2 };
-
-export const BASE_PADDING = 4;
-
-export const CARDS_PER_SHEET_OPTIONS = [4, 6, 8, 10, 12, 15, 18];
-
-export const DEFAULT_CARDS_PER_SHEET = 10;
 
 const GRID_CONFIGS = {
   4: { cols: 2, rows: 2 },
@@ -48,6 +26,14 @@ const GRID_CONFIGS = {
   15: { cols: 3, rows: 5 },
   18: { cols: 3, rows: 6 },
 };
+
+export const CARDS_PER_SHEET_OPTIONS = Object.keys(GRID_CONFIGS).map(Number);
+
+export const DEFAULT_CARDS_PER_SHEET = 10;
+
+export const HOLE = { diameter: 6, centerFromEdge: 8, clearance: 2 };
+
+export const BASE_PADDING = 4;
 
 /**
  * Returns grid configuration for a given cards-per-sheet option.
@@ -73,10 +59,7 @@ export function gridFor(cardsPerSheet = DEFAULT_CARDS_PER_SHEET) {
   }
   const config = GRID_CONFIGS[cardsPerSheet];
   const { cols, rows } = config;
-  const marginLeft = 14;
-  const marginTop = 11;
-  const width = 182;
-  const height = 275;
+  const { marginLeft, marginTop, width, height } = GRID_AREA;
   const cardWidth = width / cols;
   const cardHeight = height / rows;
 
@@ -92,6 +75,29 @@ export function gridFor(cardsPerSheet = DEFAULT_CARDS_PER_SHEET) {
     cardHeight,
   };
 }
+
+const defaultGrid = gridFor(DEFAULT_CARDS_PER_SHEET);
+
+export const GRID = {
+  cols: defaultGrid.cols,
+  rows: defaultGrid.rows,
+  cardsPerSheet: defaultGrid.cardsPerSheet,
+  marginLeft: defaultGrid.marginLeft,
+  marginTop: defaultGrid.marginTop,
+  width: defaultGrid.width,
+  height: defaultGrid.height,
+  w: defaultGrid.width,
+  h: defaultGrid.height,
+  x: defaultGrid.marginLeft,
+  y: defaultGrid.marginTop,
+};
+
+export const CARD = {
+  width: defaultGrid.cardWidth,
+  height: defaultGrid.cardHeight,
+  w: defaultGrid.cardWidth,
+  h: defaultGrid.cardHeight,
+};
 
 /**
  * Returns the front-face rect {x, y, w, h} (in mm) for a card slot.
