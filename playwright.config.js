@@ -10,7 +10,7 @@ export default defineConfig({
   retries: 0,
   forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
-  use: { baseURL: `http://localhost:${port}` },
+  use: { baseURL: `http://localhost:${port}`, locale: 'ja-JP' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: `npx vite --port ${port} --strictPort`,

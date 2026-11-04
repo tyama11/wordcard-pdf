@@ -34,40 +34,43 @@
 <body>
   <div id="app" class="container">
     <header class="app-header">
-      <h1 class="app-title">単語カードPDFメーカー</h1>
-      <p class="app-description">CSVファイルから両面印刷用の単語カードPDFを生成するWebツールです。</p>
+      <div class="header-top">
+        <h1 class="app-title" data-i18n="app.title">単語カードPDFメーカー</h1>
+        <select id="locale-select" class="locale-select" data-i18n-attr="aria-label:header.localeSelectAria" aria-label="言語を選択"></select>
+      </div>
+      <p class="app-description" data-i18n="app.description">CSVファイルから両面印刷用の単語カードPDFを生成するWebツールです。</p>
       <div class="privacy-badge">
         <svg class="privacy-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
         </svg>
-        <span>CSVはブラウザ内だけで処理され、どこにも送信されません</span>
+        <span data-i18n="header.privacy">CSVはブラウザ内だけで処理され、どこにも送信されません</span>
       </div>
     </header>
 
     <section id="ai-guide" class="ai-guide">
-      <h2 class="ai-guide-heading">単語帳やノートの写真から、AIでCSVを作れます</h2>
-      <p class="ai-guide-body">写真と下の依頼文をAIチャットに渡し、返ってきた内容を .csv で保存して Step 1 で読み込んでください。</p>
+      <h2 class="ai-guide-heading" data-i18n="ai.heading">単語帳やノートの写真から、AIでCSVを作れます</h2>
+      <p class="ai-guide-body" data-i18n="ai.body">写真と下の依頼文をAIチャットに渡し、返ってきた内容を .csv で保存して Step 1 で読み込んでください。</p>
       <div class="ai-guide-actions">
-        <button type="button" id="ai-prompt-copy" class="btn secondary-btn">依頼文をコピー</button>
+        <button type="button" id="ai-prompt-copy" class="btn secondary-btn" data-i18n="ai.copy">依頼文をコピー</button>
         <span id="ai-copy-status" class="ai-copy-status" role="status" aria-live="polite"></span>
       </div>
       <details id="ai-prompt-details" class="ai-prompt-details">
-        <summary>依頼文を見る</summary>
+        <summary data-i18n="ai.viewPrompt">依頼文を見る</summary>
         <div class="details-content">
           <pre id="ai-prompt-text"></pre>
         </div>
       </details>
-      <p class="ai-guide-note">※ご利用のAIの利用規約を確認の上実行してください。</p>
+      <p class="ai-guide-note" data-i18n="ai.termsNote">※ご利用のAIの利用規約を確認の上実行してください。</p>
     </section>
 
     <main>
       <!-- Step 1 -->
       <section class="step-section" id="step-1">
-        <h2>Step 1: CSVを選ぶ</h2>
-        <div id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="CSVファイルを選択またはドロップ">
+        <h2 data-i18n="step1.title">Step 1: CSVを選ぶ</h2>
+        <div id="drop-zone" class="drop-zone" tabindex="0" role="button" data-i18n-attr="aria-label:step1.dropZoneAria" aria-label="CSVファイルを選択またはドロップ">
           <input type="file" id="file-input" accept=".csv,.tsv,.txt" class="visually-hidden">
-          <p class="drop-zone-text">ここにファイルをドラッグ＆ドロップ、または</p>
-          <button type="button" id="browse-btn" class="btn secondary-btn">ファイルを選択</button>
+          <p class="drop-zone-text" data-i18n="step1.dropZoneText">ここにファイルをドラッグ＆ドロップ、または</p>
+          <button type="button" id="browse-btn" class="btn secondary-btn" data-i18n="step1.browse">ファイルを選択</button>
         </div>
 
         <div id="summary-container" class="summary-box" hidden>
@@ -79,17 +82,17 @@
         <div id="large-file-warning" class="alert-box" hidden></div>
 
         <div class="sample-link-wrapper">
-          <a href="./sample.csv" download>サンプルCSVをダウンロード</a>
+          <a href="./sample.csv" download data-i18n="step1.downloadSample">サンプルCSVをダウンロード</a>
         </div>
 
         <details class="help-details">
-          <summary>CSVの形式・書き方について</summary>
+          <summary data-i18n="step1.helpSummary">CSVの形式・書き方について</summary>
           <div class="details-content">
             <ul>
-              <li>1列目を<strong>表面（表）</strong>、2列目を<strong>裏面（裏）</strong>として読み込みます（3列目以降は無視されます）。</li>
-              <li>1行目のヘッダーは自動検出されます（<code>表|裏</code>、<code>front|back</code>、<code>問題|答え</code> など）。</li>
-              <li>文字コードは <strong>UTF-8</strong>（BOM付き/なし）および <strong>Shift_JIS</strong> に対応しています（自動判定）。</li>
-              <li>セル内に改行やカンマを含む場合は、RFC 4180 規格に従いダブルクォートで囲んでください。</li>
+              <li data-i18n-html="step1.helpLine1">1列目を<strong>表面（表）</strong>、2列目を<strong>裏面（裏）</strong>として読み込みます（3列目以降は無視されます）。</li>
+              <li data-i18n-html="step1.helpLine2">1行目のヘッダーは自動検出されます（<code>表|裏</code>、<code>front|back</code>、<code>問題|答え</code> など）。</li>
+              <li data-i18n-html="step1.helpLine3">文字コードは <strong>UTF-8</strong>（BOM付き/なし）および <strong>Shift_JIS</strong> に対応しています（自動判定）。</li>
+              <li data-i18n-html="step1.helpLine4">セル内に改行やカンマを含む場合は、RFC 4180 規格に従いダブルクォートで囲んでください。</li>
             </ul>
           </div>
         </details>
@@ -97,76 +100,76 @@
 
       <!-- Step 2 -->
       <section class="step-section" id="step-2">
-        <h2>Step 2: 印刷設定</h2>
+        <h2 data-i18n="step2.title">Step 2: 印刷設定</h2>
         <div class="form-group">
-          <label for="cards-per-sheet">1ページあたりの枚数</label>
+          <label for="cards-per-sheet" data-i18n="settings.cardsPerSheet">1ページあたりの枚数</label>
           <select id="cards-per-sheet"></select>
-          <p id="cards-per-sheet-help" class="help-text">枚数を変えるとカードの大きさも変わります。市販の10面名刺カード用紙に合わせる場合は、10枚を選んでください。</p>
+          <p id="cards-per-sheet-help" class="help-text" data-i18n="settings.cardsPerSheetHelp">枚数を変えるとカードの大きさも変わります。市販の10面名刺カード用紙に合わせる場合は、10枚を選んでください。</p>
         </div>
 
         <div class="form-group">
-          <label for="flip-select">とじ方</label>
+          <label for="flip-select" data-i18n="settings.flip">とじ方</label>
           <select id="flip-select">
-            <option value="long">長辺とじ（推奨）</option>
-            <option value="short">短辺とじ</option>
+            <option value="long" data-i18n="settings.flipLong">長辺とじ（推奨）</option>
+            <option value="short" data-i18n="settings.flipShort">短辺とじ</option>
           </select>
         </div>
 
         <fieldset class="offset-fieldset">
-          <legend>裏面のずれ補正</legend>
+          <legend data-i18n="settings.offsetLegend">裏面のずれ補正</legend>
           <div class="offset-inputs">
             <div class="form-group">
-              <label for="offset-x">裏面オフセット X</label>
+              <label for="offset-x" data-i18n="settings.offsetX">裏面オフセット X</label>
               <div class="input-with-unit">
                 <input type="number" id="offset-x" step="0.1" min="-5.0" max="5.0" value="0.0">
                 <span>mm</span>
               </div>
             </div>
             <div class="form-group">
-              <label for="offset-y">裏面オフセット Y</label>
+              <label for="offset-y" data-i18n="settings.offsetY">裏面オフセット Y</label>
               <div class="input-with-unit">
                 <input type="number" id="offset-y" step="0.1" min="-5.0" max="5.0" value="0.0">
                 <span>mm</span>
               </div>
             </div>
           </div>
-          <p class="help-text">裏面を見たとき、+X は裏面を右へ、+Y は裏面を下へ移動します（-X は左へ、-Y は上へ移動）。</p>
+          <p class="help-text" data-i18n="settings.offsetHelp">裏面を見たとき、+X は裏面を右へ、+Y は裏面を下へ移動します（-X は左へ、-Y は上へ移動）。</p>
         </fieldset>
 
         <div class="form-group checkbox-group">
           <label class="checkbox-label">
             <input type="checkbox" id="crop-marks" checked>
-            <span>トンボ（裁断マーク）を印刷する</span>
+            <span data-i18n="settings.cropMarks">トンボ（裁断マーク）を印刷する</span>
           </label>
         </div>
 
         <div class="form-group checkbox-group">
           <label class="checkbox-label">
             <input type="checkbox" id="hole" checked>
-            <span>穴あけ位置をあける（左辺中央・直径6mm）</span>
+            <span data-i18n="settings.hole">穴あけ位置をあける（左辺中央・直径6mm）</span>
           </label>
-          <p class="help-text">文字が穴にかからないよう、穴側に余白をとります（裏面も穴の位置に合わせて自動調整）</p>
+          <p class="help-text" data-i18n="settings.holeHelp">文字が穴にかからないよう、穴側に余白をとります（裏面も穴の位置に合わせて自動調整）</p>
         </div>
 
         <div class="form-group">
-          <label for="hole-guide">穴の目印</label>
+          <label for="hole-guide" data-i18n="settings.holeGuide">穴の目印</label>
           <select id="hole-guide">
-            <option value="none">印刷しない</option>
-            <option value="first" selected>各シートの左上のカードのみ</option>
-            <option value="all">すべてのカード</option>
+            <option value="none" data-i18n="settings.holeGuideNone">印刷しない</option>
+            <option value="first" selected data-i18n="settings.holeGuideFirst">各シートの左上のカードのみ</option>
+            <option value="all" data-i18n="settings.holeGuideAll">すべてのカード</option>
           </select>
         </div>
 
         <div class="calibration-block">
-          <button type="button" id="calibration-btn" class="btn secondary-btn">位置合わせシートをダウンロード</button>
-          <p class="help-text">両面印刷した位置合わせシートを光に透かし、表の十字が裏の目盛りのどこに見えるかを読み取ります。読み取った値を、今の補正値に足して入力してください（裏面を見て +X＝右、+Y＝下）。</p>
+          <button type="button" id="calibration-btn" class="btn secondary-btn" data-i18n="settings.calibrationBtn">位置合わせシートをダウンロード</button>
+          <p class="help-text" data-i18n="settings.calibrationHelp">両面印刷した位置合わせシートを光に透かし、表の十字が裏の目盛りのどこに見えるかを読み取ります。読み取った値を、今の補正値に足して入力してください（裏面を見て +X＝右、+Y＝下）。</p>
         </div>
       </section>
 
       <!-- Step 3 -->
       <section class="step-section" id="step-3">
-        <h2>Step 3: PDFを作る</h2>
-        <button type="button" id="generate-btn" class="btn primary-btn" disabled>PDFを作成してダウンロード</button>
+        <h2 data-i18n="step3.title">Step 3: PDFを作る</h2>
+        <button type="button" id="generate-btn" class="btn primary-btn" disabled data-i18n="step3.generate">PDFを作成してダウンロード</button>
 
         <div id="progress-container" class="progress-container" hidden>
           <progress id="progress-bar" value="0" max="100"></progress>
@@ -174,44 +177,44 @@
         </div>
 
         <div id="print-notice" class="notice-box" hidden>
-          <h3>印刷時の注意</h3>
+          <h3 data-i18n="printNotice.title">印刷時の注意</h3>
           <ul>
-            <li><strong>用紙サイズ</strong>: A4</li>
-            <li><strong>倍率設定</strong>: 「実際のサイズ」または「100%」を選択してください（「ページに合わせる / 用紙に合わせる」は必ずOFF）。</li>
-            <li><strong>両面印刷</strong>: <span id="duplex-notice-text">「両面印刷・長辺とじ」に設定してください。</span></li>
-            <li><strong>フチなし印刷</strong>: 「フチなし印刷」はOFFにしてください（拡大されて位置がずれます）。</li>
+            <li data-i18n-html="printNotice.paperSize"><strong>用紙サイズ</strong>: A4</li>
+            <li data-i18n-html="printNotice.scale"><strong>倍率設定</strong>: 「実際のサイズ」または「100%」を選択してください（「ページに合わせる / 用紙に合わせる」は必ずOFF）。</li>
+            <li><strong data-i18n="printNotice.duplexLabel">両面印刷</strong>: <span id="duplex-notice-text">「両面印刷・長辺とじ」に設定してください。</span></li>
+            <li data-i18n-html="printNotice.borderless"><strong>フチなし印刷</strong>: 「フチなし印刷」はOFFにしてください（拡大されて位置がずれます）。</li>
           </ul>
         </div>
       </section>
 
       <!-- Cheat sheet -->
       <details class="cheatsheet-details">
-        <summary>数式・化学式の書き方（TeX・mhchem記法チートシート）</summary>
+        <summary data-i18n="cheatsheet.summary">数式・化学式の書き方（TeX・mhchem記法チートシート）</summary>
         <div class="details-content">
-          <p>セル内のテキストに以下の記法を埋め込むことで、数式や化学式をきれいに表示できます。</p>
+          <p data-i18n="cheatsheet.intro">セル内のテキストに以下の記法を埋め込むことで、数式や化学式をきれいに表示できます。</p>
           <ul>
-            <li>インライン数式: <code>$式$</code> または <code>\(式\)</code></li>
-            <li>独立行数式（センタリング）: <code>$$式$$</code> または <code>\[式\]</code></li>
-            <li>化学式・反応式: <code>\ce{式}</code>（数式の外でもそのまま記述できます）</li>
-            <li>通常のドル記号（半角）: <code>\$</code></li>
+            <li data-i18n-html="cheatsheet.inlineMath">インライン数式: <code>$式$</code> または <code>\(式\)</code></li>
+            <li data-i18n-html="cheatsheet.displayMath">独立行数式（センタリング）: <code>$$式$$</code> または <code>\[式\]</code></li>
+            <li data-i18n-html="cheatsheet.chemistry">化学式・反応式: <code>\ce{式}</code>（数式の外でもそのまま記述できます）</li>
+            <li data-i18n-html="cheatsheet.dollar">通常のドル記号（半角）: <code>\$</code></li>
           </ul>
           <table class="cheat-table">
             <thead>
               <tr>
-                <th>書き方（例）</th>
-                <th>説明</th>
+                <th data-i18n="cheatsheet.thSyntax">書き方（例）</th>
+                <th data-i18n="cheatsheet.thDescription">説明</th>
               </tr>
             </thead>
             <tbody>
-              <tr><td><code>$x^2$</code></td><td>上付き添字・累乗</td></tr>
-              <tr><td><code>$\frac{a}{b}$</code></td><td>分数</td></tr>
-              <tr><td><code>$\sqrt{x}$</code></td><td>平方根（ルート）</td></tr>
-              <tr><td><code>$$...$$</code></td><td>独立行数式（センタリング表示）</td></tr>
-              <tr><td><code>\ce{H2O}</code></td><td>化学式（水）</td></tr>
-              <tr><td><code>\ce{2H2 + O2 -> 2H2O}</code></td><td>化学反応式</td></tr>
-              <tr><td><code>\ce{Fe^{3+}}</code></td><td>イオン電荷</td></tr>
-              <tr><td><code>\ce{A &lt;=&gt; B}</code></td><td>平衡反応の矢印</td></tr>
-              <tr><td><code>\$</code></td><td>半角ドル記号の表示</td></tr>
+              <tr><td><code>$x^2$</code></td><td data-i18n="cheatsheet.descSuperscript">上付き添字・累乗</td></tr>
+              <tr><td><code>$\frac{a}{b}$</code></td><td data-i18n="cheatsheet.descFraction">分数</td></tr>
+              <tr><td><code>$\sqrt{x}$</code></td><td data-i18n="cheatsheet.descSqrt">平方根（ルート）</td></tr>
+              <tr><td><code>$$...$$</code></td><td data-i18n="cheatsheet.descDisplay">独立行数式（センタリング表示）</td></tr>
+              <tr><td><code>\ce{H2O}</code></td><td data-i18n="cheatsheet.descWater">化学式（水）</td></tr>
+              <tr><td><code>\ce{2H2 + O2 -> 2H2O}</code></td><td data-i18n="cheatsheet.descReaction">化学反応式</td></tr>
+              <tr><td><code>\ce{Fe^{3+}}</code></td><td data-i18n="cheatsheet.descIon">イオン電荷</td></tr>
+              <tr><td><code>\ce{A &lt;=&gt; B}</code></td><td data-i18n="cheatsheet.descEquilibrium">平衡反応の矢印</td></tr>
+              <tr><td><code>\$</code></td><td data-i18n="cheatsheet.descDollar">半角ドル記号の表示</td></tr>
             </tbody>
           </table>
         </div>
@@ -220,12 +223,12 @@
 
     <!-- Confirmation Dialog -->
     <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-dialog-title">
-      <h2 id="confirm-dialog-title">数式の確認</h2>
-      <p>このまま作成すると、誤りのある部分は赤字で印刷され、カードの下に「⚠ 数式エラー」と表示されます。</p>
+      <h2 id="confirm-dialog-title" data-i18n="dialog.defaultTitle">数式の確認</h2>
+      <p data-i18n="dialog.description">このまま作成すると、誤りのある部分は赤字で印刷され、カードの下に「⚠ 数式エラー」と表示されます。</p>
       <div class="confirm-dialog-list" id="confirm-dialog-list"></div>
       <footer class="confirm-dialog-footer">
-        <button type="button" id="dialog-cancel-btn" class="btn secondary-btn" autofocus>戻って直す</button>
-        <button type="button" id="dialog-proceed-btn" class="btn primary-btn">このまま作成する</button>
+        <button type="button" id="dialog-cancel-btn" class="btn secondary-btn" autofocus data-i18n="dialog.cancel">戻って直す</button>
+        <button type="button" id="dialog-proceed-btn" class="btn primary-btn" data-i18n="dialog.proceed">このまま作成する</button>
       </footer>
     </dialog>
 
