@@ -1,19 +1,14 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import zlib from 'node:zlib';
 import { describe, it, expect, vi } from 'vitest';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { buildCardsPdf, buildCalibrationPdf } from '../../src/pdf.js';
 import { frontRect, backRect, mapToBack } from '../../src/layout.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURE_PNG_PATH = path.resolve(__dirname, '../fixtures/tiny.png');
-const FIXTURE_JPG_PATH = path.resolve(__dirname, '../fixtures/tiny.jpg');
-const DUMMY_PNG_DATA_URL = `data:image/png;base64,${fs.readFileSync(FIXTURE_PNG_PATH).toString('base64')}`;
-const DUMMY_JPG_DATA_URL = `data:image/jpeg;base64,${fs.readFileSync(FIXTURE_JPG_PATH).toString('base64')}`;
-
-const STANDARD_FONTS_DIR = path.resolve('node_modules/pdfjs-dist/standard_fonts/') + '/';
+import {
+  loadPdf,
+  extractPageImagesWithKeys,
+  DUMMY_PNG_DATA_URL,
+  DUMMY_JPG_DATA_URL,
+} from '../helpers/pdf.js';
 
 /**
  * Creates a unique 1x1 PNG data URL with RGB values.
@@ -52,58 +47,6 @@ function create1x1Png(r, g, b) {
   return 'data:image/png;base64,' + Buffer.concat([sig, ihdr, idat, iend]).toString('base64');
 }
 
-/**
- * Extracts painted image rects { x, y, w, h, key } in top-left mm coordinates
- * from a pdfjs page by tracking save/restore/transform operations on the CTM.
- */
-async function extractPageImagesWithKeys(page, ops) {
-  const k = 72 / 25.4;
-  const pageHeightPt = page.view[3];
-  let ctm = [1, 0, 0, 1, 0, 0];
-  const stack = [];
-  const images = [];
-
-  for (let i = 0; i < ops.fnArray.length; i++) {
-    const fn = ops.fnArray[i];
-    const args = ops.argsArray[i];
-
-    if (fn === pdfjsLib.OPS.save) {
-      stack.push([...ctm]);
-    } else if (fn === pdfjsLib.OPS.restore) {
-      ctm = stack.pop() ?? [1, 0, 0, 1, 0, 0];
-    } else if (fn === pdfjsLib.OPS.transform) {
-      ctm = pdfjsLib.Util.transform(ctm, args);
-    } else if (
-      fn === pdfjsLib.OPS.paintImageXObject ||
-      fn === pdfjsLib.OPS.paintInlineImageXObject
-    ) {
-      const imgName = args[0];
-      const [a, b, c, d, e, f] = ctm;
-      const x = e / k;
-      const y = (pageHeightPt - (f + d)) / k;
-      const w = a / k;
-      const h = d / k;
-
-      let key = imgName;
-      if (page.objs && page.commonObjs) {
-        const obj = await new Promise((resolve) => {
-          if (page.objs.has(imgName)) {
-            page.objs.get(imgName, resolve);
-          } else {
-            page.commonObjs.get(imgName, resolve);
-          }
-        });
-        if (obj) {
-          key = obj.ref || (obj.data ? Array.from(obj.data).join(',') : imgName);
-        }
-      }
-
-      images.push({ x, y, w, h, key });
-    }
-  }
-
-  return images;
-}
 
 /**
  * Extracts line segments { x1, y1, x2, y2 } in top-left mm coordinates.
@@ -193,7 +136,7 @@ describe('pdf.js', () => {
     // --- Long flip with zero offset ---
     {
       const pdfBytes = await buildCardsPdf(cards, renderDistinct, { flip: 'long' });
-      const pdf = await pdfjsLib.getDocument({ data: pdfBytes, standardFontDataUrl: STANDARD_FONTS_DIR }).promise;
+      const pdf = await loadPdf(pdfBytes);
 
       const p1 = await pdf.getPage(1);
       const p2 = await pdf.getPage(2);
@@ -229,7 +172,7 @@ describe('pdf.js', () => {
     // --- Short flip with zero offset ---
     {
       const pdfBytes = await buildCardsPdf(cards, renderDistinct, { flip: 'short' });
-      const pdf = await pdfjsLib.getDocument({ data: pdfBytes, standardFontDataUrl: STANDARD_FONTS_DIR }).promise;
+      const pdf = await loadPdf(pdfBytes);
 
       const p1 = await pdf.getPage(1);
       const p2 = await pdf.getPage(2);
@@ -275,7 +218,7 @@ describe('pdf.js', () => {
         backOffsetY: oy,
       });
 
-      const pdf = await pdfjsLib.getDocument({ data: pdfBytes, standardFontDataUrl: STANDARD_FONTS_DIR }).promise;
+      const pdf = await loadPdf(pdfBytes);
 
       // Page count: 23 cards = 6 pages
       expect(pdf.numPages).toBe(6);
@@ -362,7 +305,7 @@ describe('pdf.js', () => {
       cropMarks: true,
     });
 
-    const pdf = await pdfjsLib.getDocument({ data: pdfBytes, standardFontDataUrl: STANDARD_FONTS_DIR }).promise;
+    const pdf = await loadPdf(pdfBytes);
 
     for (let sheet = 0; sheet < 3; sheet++) {
       const frontPageNum = sheet * 2 + 1;
@@ -395,7 +338,7 @@ describe('pdf.js', () => {
       cropMarks: false,
     });
 
-    const pdf = await pdfjsLib.getDocument({ data: pdfBytes, standardFontDataUrl: STANDARD_FONTS_DIR }).promise;
+    const pdf = await loadPdf(pdfBytes);
     const page1 = await pdf.getPage(1);
     const ops = await page1.getOperatorList();
     const lines = extractPageLines(ops, page1.view);
@@ -408,7 +351,7 @@ describe('pdf.js', () => {
     const renderJpeg = async () => DUMMY_JPG_DATA_URL;
 
     const pdfBytes = await buildCardsPdf(cards, renderJpeg);
-    const pdf = await pdfjsLib.getDocument({ data: pdfBytes, standardFontDataUrl: STANDARD_FONTS_DIR }).promise;
+    const pdf = await loadPdf(pdfBytes);
 
     const p1 = await pdf.getPage(1);
     const imgs = await extractPageImagesWithKeys(p1, await p1.getOperatorList());
@@ -430,7 +373,7 @@ describe('pdf.js', () => {
     ];
 
     const pdfBytes = await buildCardsPdf(cards, renderFaceMock);
-    const pdf = await pdfjsLib.getDocument({ data: pdfBytes, standardFontDataUrl: STANDARD_FONTS_DIR }).promise;
+    const pdf = await loadPdf(pdfBytes);
 
     expect(renderFaceMock).toHaveBeenCalledTimes(2);
     expect(renderFaceMock).toHaveBeenCalledWith('Hello', { holeSide: null, cardWidthMm: 91, cardHeightMm: 55 });
@@ -478,7 +421,7 @@ describe('pdf.js', () => {
     const pdfBytes = buildCalibrationPdf(opts);
     expect(pdfBytes).toBeInstanceOf(Uint8Array);
 
-    const pdf = await pdfjsLib.getDocument({ data: pdfBytes, standardFontDataUrl: STANDARD_FONTS_DIR }).promise;
+    const pdf = await loadPdf(pdfBytes);
     expect(pdf.numPages).toBe(2);
 
     const page1 = await pdf.getPage(1);
