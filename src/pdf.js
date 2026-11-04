@@ -104,6 +104,52 @@ function drawHoleGuides(doc, slots, cardsPerSheet) {
 }
 
 /**
+ * Renders faces for a sheet side (front or back) and adds their images to the PDF.
+ *
+ * @param {object} params
+ * @param {jsPDF} params.doc jsPDF document instance
+ * @param {Array<{ card: { front: string, back: string }, slot: number }>} params.sheetCards Cards on current sheet
+ * @param {'front'|'back'} params.side 'front' or 'back'
+ * @param {(text: string, opts?: object) => Promise<string>} params.renderFace Face renderer
+ * @param {object} params.grid Grid layout parameters
+ * @param {object} params.layoutOpts Layout options
+ * @param {boolean} params.hole Whether punch hole is enabled
+ * @param {'long'|'short'} params.flip Duplex flip mode
+ * @param {() => void} params.stepProgress Callback invoked per card slot processed
+ */
+async function renderSheetSide({
+  doc,
+  sheetCards,
+  side,
+  renderFace,
+  grid,
+  layoutOpts,
+  hole,
+  flip,
+  stepProgress,
+}) {
+  const isBack = side === 'back';
+
+  for (const { card, slot } of sheetCards) {
+    const text = card[side];
+    if (!isBlank(text)) {
+      const faceOpts = {
+        holeSide: hole ? holeSide(side, flip) : null,
+        cardWidthMm: grid.cardWidth,
+        cardHeightMm: grid.cardHeight,
+      };
+      const dataUrl = await renderFace(text, faceOpts);
+      if (dataUrl) {
+        const rect = isBack ? backRect(slot, layoutOpts) : frontRect(slot, layoutOpts.cardsPerSheet);
+        const format = getImageFormat(dataUrl);
+        doc.addImage(dataUrl, format, rect.x, rect.y, rect.w, rect.h, undefined, 'FAST');
+      }
+    }
+    stepProgress();
+  }
+}
+
+/**
  * Builds a duplex-printable PDF containing business-card size word cards.
  *
  * Pages are generated in duplex printing order:
@@ -181,22 +227,17 @@ export async function buildCardsPdf(cards, renderFace, opts = {}) {
       }
     }
 
-    for (const { card, slot } of sheetCards) {
-      if (!isBlank(card.front)) {
-        const frontOpts = {
-          holeSide: hole ? holeSide('front', flip) : null,
-          cardWidthMm: grid.cardWidth,
-          cardHeightMm: grid.cardHeight,
-        };
-        const dataUrl = await renderFace(card.front, frontOpts);
-        if (dataUrl) {
-          const rect = frontRect(slot, cardsPerSheet);
-          const format = getImageFormat(dataUrl);
-          doc.addImage(dataUrl, format, rect.x, rect.y, rect.w, rect.h, undefined, 'FAST');
-        }
-      }
-      stepProgress();
-    }
+    await renderSheetSide({
+      doc,
+      sheetCards,
+      side: 'front',
+      renderFace,
+      grid,
+      layoutOpts,
+      hole,
+      flip,
+      stepProgress,
+    });
 
     if (hole && holeGuide !== 'none') {
       const guideSlots = holeGuide === 'first'
@@ -209,22 +250,17 @@ export async function buildCardsPdf(cards, renderFace, opts = {}) {
     doc.addPage();
     drawCropMarks(doc, true, layoutOpts);
 
-    for (const { card, slot } of sheetCards) {
-      if (!isBlank(card.back)) {
-        const backOpts = {
-          holeSide: hole ? holeSide('back', flip) : null,
-          cardWidthMm: grid.cardWidth,
-          cardHeightMm: grid.cardHeight,
-        };
-        const dataUrl = await renderFace(card.back, backOpts);
-        if (dataUrl) {
-          const rect = backRect(slot, layoutOpts);
-          const format = getImageFormat(dataUrl);
-          doc.addImage(dataUrl, format, rect.x, rect.y, rect.w, rect.h, undefined, 'FAST');
-        }
-      }
-      stepProgress();
-    }
+    await renderSheetSide({
+      doc,
+      sheetCards,
+      side: 'back',
+      renderFace,
+      grid,
+      layoutOpts,
+      hole,
+      flip,
+      stepProgress,
+    });
   }
 
   return new Uint8Array(doc.output('arraybuffer'));
