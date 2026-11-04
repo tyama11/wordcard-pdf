@@ -86,7 +86,7 @@ test.describe('TeX Error Features and Confirmation Dialog E2E', () => {
     const download = await downloadPromise;
 
     const filename = download.suggestedFilename();
-    expect(filename).toMatch(/^wordcards-\d{8}-\d{4}\.pdf$/);
+    expect(filename).toBe('dialog-errors.pdf');
 
     const downloadPath = await download.path();
     const pdfBytes = fs.readFileSync(downloadPath);
@@ -114,7 +114,7 @@ test.describe('TeX Error Features and Confirmation Dialog E2E', () => {
     await expect(page.locator('#confirm-dialog')).not.toBeVisible();
 
     const download = await downloadPromise;
-    expect(download.suggestedFilename()).toMatch(/^wordcards-\d{8}-\d{4}\.pdf$/);
+    expect(download.suggestedFilename()).toBe('dialog-valid.pdf');
   });
 
   test('(e) CSV containing "¥frac{1}{2}" and "¥100": info note shows 1か所, no TeX error reported', async ({ page }) => {

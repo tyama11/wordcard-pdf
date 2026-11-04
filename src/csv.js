@@ -78,6 +78,17 @@ export function hasHeaderRow(rawText) {
 }
 
 /**
+ * Returns the PDF file name for a loaded CSV: same name with the extension changed to .pdf.
+ *
+ * @param {string} csvName - Name of the loaded file, e.g. "english.csv".
+ * @returns {string} PDF file name, e.g. "english.pdf".
+ */
+export function pdfFilenameFor(csvName) {
+  const base = String(csvName ?? '').trim().replace(/\.(csv|tsv|txt)$/i, '');
+  return `${base || 'wordcards'}.pdf`;
+}
+
+/**
  * Decodes a byte buffer into a string, stripping UTF-8 BOM if present,
  * and falling back to Shift_JIS if UTF-8 decoding produces replacement characters (U+FFFD).
  *
