@@ -31,20 +31,18 @@ import '@mathjax/mathjax-newcm-font/js/svg/dynamic/symbols.js';
 import '@mathjax/mathjax-newcm-font/js/svg/dynamic/variants.js';
 import html2canvas from 'html2canvas-pro';
 import { splitTex } from './texsplit.js';
-import { facePadding } from './layout.js';
+import { CARD, facePadding } from './layout.js';
 
 export { splitTex };
 
 const MM_PER_IN = 25.4;
 const CSS_DPI = 96;
-const CARD_W_MM = 91;
-const CARD_H_MM = 55;
 const PX_PER_MM = CSS_DPI / MM_PER_IN;
 
 /** Card face width in CSS px (91 mm at 96 dpi = 343.94 px). */
-export const FACE_WIDTH_PX = CARD_W_MM * PX_PER_MM;
+export const FACE_WIDTH_PX = CARD.width * PX_PER_MM;
 /** Card face height in CSS px (55 mm at 96 dpi = 207.87 px). */
-export const FACE_HEIGHT_PX = CARD_H_MM * PX_PER_MM;
+export const FACE_HEIGHT_PX = CARD.height * PX_PER_MM;
 /** Auto-fit font-size range and resolution in CSS px. */
 export const FIT_MIN_PX = 6;
 export const FIT_MAX_PX = 48;
@@ -352,8 +350,8 @@ export function buildFace(
   {
     errorNote = true,
     holeSide = null,
-    cardWidthMm = CARD_W_MM,
-    cardHeightMm = CARD_H_MM,
+    cardWidthMm = CARD.width,
+    cardHeightMm = CARD.height,
   } = {}
 ) {
   const pad = facePadding(holeSide);
@@ -508,8 +506,8 @@ export async function renderFace(
     format = 'png',
     errorNote = true,
     holeSide = null,
-    cardWidthMm = CARD_W_MM,
-    cardHeightMm = CARD_H_MM,
+    cardWidthMm = CARD.width,
+    cardHeightMm = CARD.height,
   } = {}
 ) {
   const outW = Math.round((cardWidthMm / MM_PER_IN) * dpi);
