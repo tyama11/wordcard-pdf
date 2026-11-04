@@ -8,12 +8,13 @@ This document defines the single-page user interface specification for `wordcard
 
 The application is structured as a clean, single-column workflow divided into logical steps:
 1. Header
-2. Step 1: CSVを選ぶ (Select CSV)
-3. Step 2: 印刷設定 (Print Settings)
-4. Step 3: PDFを作る (Generate PDF)
-5. Error & Warning Displays
-6. Cheat Sheet: 数式・化学式の書き方 (Collapsible LaTeX & Chemistry syntax reference)
-7. Footer
+2. AI Guide: 単語帳やノートの写真から、AIでCSVを作れます (Convert Photo to CSV Guide)
+3. Step 1: CSVを選ぶ (Select CSV)
+4. Step 2: 印刷設定 (Print Settings)
+5. Step 3: PDFを作る (Generate PDF)
+6. Error & Warning Displays
+7. Cheat Sheet: 数式・化学式の書き方 (Collapsible LaTeX & Chemistry syntax reference)
+8. Footer
 
 ---
 
@@ -27,7 +28,26 @@ The application is structured as a clean, single-column workflow divided into lo
 
 ---
 
-## 2. Step 1: CSVを選ぶ (Select CSV)
+## 2. AI Guide: 単語帳やノートの写真から、AIでCSVを作れます (`#ai-guide`)
+
+Directly under the header and above Step 1:
+- **Container**: `<section id="ai-guide">`
+- **Heading**: `単語帳やノートの写真から、AIでCSVを作れます`
+- **Explanation**: Explains that a photo of a vocabulary book or handwritten study notes can be converted into a compatible CSV using an AI chat service (e.g. ChatGPT, Claude, Gemini).
+- **Copy Button**:
+  - Element: `<button id="ai-prompt-copy">`
+  - Button text: `依頼文をコピー`
+  - Action: Copies prompt text (`AI_CSV_PROMPT` from `src/ai-guide.js`) to clipboard.
+  - Success Feedback: Button text changes to `コピーしました` for 2 seconds, then reverts.
+  - Failure Feedback: Shows an error message and automatically opens the details `<details id="ai-prompt-details">`.
+- **Details / Fallback**:
+  - Collapsible `<details id="ai-prompt-details">` containing the text (依頼文) for manual selection and copying.
+- **Privacy Distinction**:
+  - Clarifies that photos are uploaded directly to the user's chosen third-party AI service; `wordcard-pdf` itself does not receive or send any photo or card data.
+
+---
+
+## 3. Step 1: CSVを選ぶ (Select CSV)
 
 - **Section Heading**: `Step 1: CSVを選ぶ`
 - **Drag & Drop Zone and File Button**:
@@ -36,7 +56,7 @@ The application is structured as a clean, single-column workflow divided into lo
   - File picker button (e.g., `ファイルを選択`).
 - **Post-Load Information**:
   - After loading and parsing the CSV:
-    - Display card count summary: `◯枚のカード（A4 ◯枚・両面）` (calculated as `Math.ceil(cardCount / 10)` A4 sheets).
+    - Display card count summary: `◯枚のカード（A4 ◯枚・両面）` (calculated using the selected cards-per-sheet setting, `Math.ceil(cardCount / cardsPerSheet)` A4 sheets, defaulting to 10 cards per sheet).
     - **Yen Sign Normalization Note (`円記号の自動読み替え`)**:
       - If cells contain `¥` or `￥` preceding TeX commands or delimiters, they are automatically normalized to `\` via `normalizeInput()`.
       - If any replacements occur (count > 0), an info notice is displayed in `#alert-container`: `円記号（¥）をバックスラッシュ（\）として読み替えました：◯か所`.
@@ -53,9 +73,24 @@ The application is structured as a clean, single-column workflow divided into lo
 
 ---
 
-## 3. Step 2: 印刷設定 (Print Settings)
+## 4. Step 2: 印刷設定 (Print Settings)
 
 - **Section Heading**: `Step 2: 印刷設定`
+- **Cards per Sheet Select (`1ページあたりの枚数`, `#cards-per-sheet`)**:
+  - Dropdown options:
+    - `4枚（2列×2行・91×138mm）`
+    - `6枚（2列×3行・91×92mm）`
+    - `8枚（2列×4行・91×69mm）`
+    - `10枚（2列×5行・91×55mm）` (default, value: `10`)
+    - `12枚（3列×4行・61×69mm）`
+    - `15枚（3列×5行・61×55mm）`
+    - `18枚（3列×6行・61×46mm）`
+  - Helper text: `枚数を変えるとカードの大きさも変わります。市販の10面名刺カード用紙に合うのは10枚だけです。`
+  - Behavior:
+    - Minimum 4, maximum 18, default 10.
+    - Only 10 fits commercial 10-up perforated business-card paper.
+    - Selection is saved in `localStorage` (key: `wordcard_cardsPerSheet`); invalid or missing values fall back to 10.
+    - Changing the selection updates the required sheet count calculation in Step 1.
 - **Binding / Flip Select (`とじ方`)**:
   - Dropdown options:
     - `長辺とじ（推奨）` (value: `long`)
@@ -68,6 +103,17 @@ The application is structured as a clean, single-column workflow divided into lo
     - Input: `<input type="number" step="0.1" min="-5.0" max="5.0" value="0.0">` (unit: `mm`).
   - **Sign Explanation**:
     - Clear directional guide: `裏面を見たとき、+X は裏面を右へ、+Y は裏面を下へ移動します（-X は左へ、-Y は上へ移動）。`
+- **Punch Hole Checkbox (`穴あけ位置をあける`)**:
+  - Label: `穴あけ位置をあける`
+  - Default: Checked (`true`).
+  - Leaves 13mm margin bandwidth on the hole-side of the card for 6mm ring hole punching.
+- **Punch Hole Guide Select (`穴の目印`)**:
+  - Label: `穴の目印`
+  - Dropdown options:
+    - `印刷しない` (value: `none`)
+    - `各シートの左上のカードのみ` (value: `first`, default)
+    - `すべてのカード` (value: `all`)
+  - Disabled when hole checkbox is unchecked.
 - **Crop Marks Checkbox (`トンボ`)**:
   - Label: `トンボ（裁断マーク）を印刷する`
   - Default: Checked (`true`).
@@ -162,8 +208,9 @@ A collapsible section (`<details>`) providing a syntax reference table:
 ## 8. Technical & Accessibility Requirements
 
 - **Local Persistence (`localStorage`)**:
-  - Persist user choices: `flip` mode, `backOffsetX`, `backOffsetY`, `cropMarks`.
+  - Persist user choices: `cardsPerSheet` (key: `wordcard_cardsPerSheet`), `flip` mode, `backOffsetX`, `backOffsetY`, `cropMarks`, `hole`, `holeGuide`.
   - All read/write operations must be safely wrapped in `try { ... } catch (e) { ... }` to handle private browsing modes and disabled cookies without throwing uncaught exceptions.
+  - Invalid or out-of-range `cardsPerSheet` values safely fall back to 10.
 - **Responsiveness**:
   - Fully responsive down to 360px viewport width.
   - Side gutters: at least 16px padding on mobile screens.

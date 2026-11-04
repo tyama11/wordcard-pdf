@@ -24,6 +24,22 @@
       </div>
     </header>
 
+    <section id="ai-guide" class="ai-guide">
+      <h2 class="ai-guide-heading">単語帳やノートの写真から、AIでCSVを作れます</h2>
+      <p class="ai-guide-body">写真と下の依頼文をAIチャットに渡し、返ってきた内容を .csv で保存して Step 1 で読み込むだけです。</p>
+      <div class="ai-guide-actions">
+        <button type="button" id="ai-prompt-copy" class="btn secondary-btn">依頼文をコピー</button>
+        <span id="ai-copy-status" class="ai-copy-status" role="status" aria-live="polite"></span>
+      </div>
+      <details id="ai-prompt-details" class="ai-prompt-details">
+        <summary>依頼文を見る</summary>
+        <div class="details-content">
+          <pre id="ai-prompt-text"></pre>
+        </div>
+      </details>
+      <p class="ai-guide-note">※写真はご利用のAIサービスに送信されます。このアプリ自体は外部に送信しません。</p>
+    </section>
+
     <main>
       <!-- Step 1 -->
       <section class="step-section" id="step-1">
@@ -62,6 +78,12 @@
       <!-- Step 2 -->
       <section class="step-section" id="step-2">
         <h2>Step 2: 印刷設定</h2>
+        <div class="form-group">
+          <label for="cards-per-sheet">1ページあたりの枚数</label>
+          <select id="cards-per-sheet"></select>
+          <p id="cards-per-sheet-help" class="help-text">枚数を変えるとカードの大きさも変わります。市販の10面名刺カード用紙に合うのは10枚だけです。</p>
+        </div>
+
         <div class="form-group">
           <label for="flip-select">とじ方</label>
           <select id="flip-select">
@@ -199,6 +221,7 @@
       <p class="footer-copy">MIT License &copy; 2026 tyama11</p>
     </footer>
   </div>
+  <script type="module" src="./src/ai-guide.js"></script>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

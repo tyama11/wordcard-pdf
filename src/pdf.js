@@ -7,6 +7,8 @@ import { jsPDF } from 'jspdf';
 import {
   GRID,
   HOLE,
+  DEFAULT_CARDS_PER_SHEET,
+  gridFor,
   frontRect,
   backRect,
   cropMarkLines,
@@ -55,7 +57,7 @@ function drawCropMarks(doc, isBack, opts) {
   if (opts.cropMarks === false) {
     return;
   }
-  const lines = cropMarkLines();
+  const lines = cropMarkLines(opts.cardsPerSheet);
   doc.setLineWidth(0.1);
   doc.setDrawColor(0, 0, 0);
 
@@ -75,8 +77,9 @@ function drawCropMarks(doc, isBack, opts) {
  *
  * @param {jsPDF} doc jsPDF document instance
  * @param {number[]} slots Slot indices to draw guides for
+ * @param {number} [cardsPerSheet] Cards per sheet
  */
-function drawHoleGuides(doc, slots) {
+function drawHoleGuides(doc, slots, cardsPerSheet) {
   if (!slots || slots.length === 0) {
     return;
   }
@@ -90,7 +93,7 @@ function drawHoleGuides(doc, slots) {
   const crossHalfLen = 1; // 2 mm long cross
 
   for (const slot of slots) {
-    const { x: cx, y: cy } = holeCenter(slot);
+    const { x: cx, y: cy } = holeCenter(slot, cardsPerSheet);
     doc.circle(cx, cy, radius, 'S');
     doc.line(cx - crossHalfLen, cy, cx + crossHalfLen, cy);
     doc.line(cx, cy - crossHalfLen, cx, cy + crossHalfLen);
@@ -107,7 +110,7 @@ function drawHoleGuides(doc, slots) {
  * Sheet 1 Front, Sheet 1 Back, Sheet 2 Front, Sheet 2 Back, ...
  *
  * @param {Array<{ front: string, back: string }>} cards List of cards
- * @param {(text: string, opts?: { holeSide: 'left'|'right'|null }) => Promise<string>} renderFace Async renderer returning PNG/JPEG data URL
+ * @param {(text: string, opts?: { holeSide: 'left'|'right'|null, cardWidthMm?: number, cardHeightMm?: number }) => Promise<string>} renderFace Async renderer returning PNG/JPEG data URL
  * @param {object} [opts] Options
  * @param {'long'|'short'} [opts.flip='long'] Duplex flip mode
  * @param {number} [opts.backOffsetX=0] Horizontal calibration offset for back side (mm)
@@ -115,6 +118,7 @@ function drawHoleGuides(doc, slots) {
  * @param {boolean} [opts.cropMarks=true] Whether to draw crop marks in margins
  * @param {boolean} [opts.hole=false] Whether cards have a punch hole
  * @param {'none'|'first'|'all'} [opts.holeGuide='none'] Hole punch guide mode on front faces
+ * @param {number} [opts.cardsPerSheet=10] Number of cards per sheet
  * @param {(done: number, total: number) => void} [opts.onProgress] Progress callback
  * @returns {Promise<Uint8Array>}
  */
@@ -126,12 +130,15 @@ export async function buildCardsPdf(cards, renderFace, opts = {}) {
     cropMarks = true,
     hole = false,
     holeGuide = 'none',
+    cardsPerSheet = DEFAULT_CARDS_PER_SHEET,
     onProgress,
   } = opts;
 
   if (holeGuide !== 'none' && holeGuide !== 'first' && holeGuide !== 'all') {
     throw new Error(`Unknown holeGuide option: "${holeGuide}". Must be 'none', 'first', or 'all'.`);
   }
+
+  const grid = gridFor(cardsPerSheet);
 
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -146,9 +153,8 @@ export async function buildCardsPdf(cards, renderFace, opts = {}) {
     return new Uint8Array(doc.output('arraybuffer'));
   }
 
-  const layoutOpts = { flip, backOffsetX, backOffsetY, cropMarks };
-  const cardsPerSheet = GRID.cardsPerSheet;
-  const numSheets = Math.ceil(cards.length / cardsPerSheet);
+  const layoutOpts = { flip, backOffsetX, backOffsetY, cropMarks, cardsPerSheet };
+  const numSheets = Math.ceil(cards.length / grid.cardsPerSheet);
   const totalSteps = cards.length * 2;
   let doneSteps = 0;
 
@@ -168,8 +174,8 @@ export async function buildCardsPdf(cards, renderFace, opts = {}) {
     drawCropMarks(doc, false, layoutOpts);
 
     const sheetCards = [];
-    for (let slot = 0; slot < cardsPerSheet; slot++) {
-      const cardIndex = sheet * cardsPerSheet + slot;
+    for (let slot = 0; slot < grid.cardsPerSheet; slot++) {
+      const cardIndex = sheet * grid.cardsPerSheet + slot;
       if (cardIndex < cards.length) {
         sheetCards.push({ card: cards[cardIndex], slot });
       }
@@ -179,10 +185,12 @@ export async function buildCardsPdf(cards, renderFace, opts = {}) {
       if (!isBlank(card.front)) {
         const frontOpts = {
           holeSide: hole ? holeSide('front', flip) : null,
+          cardWidthMm: grid.cardWidth,
+          cardHeightMm: grid.cardHeight,
         };
         const dataUrl = await renderFace(card.front, frontOpts);
         if (dataUrl) {
-          const rect = frontRect(slot);
+          const rect = frontRect(slot, cardsPerSheet);
           const format = getImageFormat(dataUrl);
           doc.addImage(dataUrl, format, rect.x, rect.y, rect.w, rect.h, undefined, 'FAST');
         }
@@ -194,7 +202,7 @@ export async function buildCardsPdf(cards, renderFace, opts = {}) {
       const guideSlots = holeGuide === 'first'
         ? (sheetCards.some((sc) => sc.slot === 0) ? [0] : [])
         : sheetCards.map((sc) => sc.slot);
-      drawHoleGuides(doc, guideSlots);
+      drawHoleGuides(doc, guideSlots, cardsPerSheet);
     }
 
     // --- Sheet Back Page ---
@@ -205,6 +213,8 @@ export async function buildCardsPdf(cards, renderFace, opts = {}) {
       if (!isBlank(card.back)) {
         const backOpts = {
           holeSide: hole ? holeSide('back', flip) : null,
+          cardWidthMm: grid.cardWidth,
+          cardHeightMm: grid.cardHeight,
         };
         const dataUrl = await renderFace(card.back, backOpts);
         if (dataUrl) {

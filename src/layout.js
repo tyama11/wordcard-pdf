@@ -35,24 +35,84 @@ export const HOLE = { diameter: 6, centerFromEdge: 8, clearance: 2 };
 
 export const BASE_PADDING = 4;
 
+export const CARDS_PER_SHEET_OPTIONS = [4, 6, 8, 10, 12, 15, 18];
+
+export const DEFAULT_CARDS_PER_SHEET = 10;
+
+const GRID_CONFIGS = {
+  4: { cols: 2, rows: 2 },
+  6: { cols: 2, rows: 3 },
+  8: { cols: 2, rows: 4 },
+  10: { cols: 2, rows: 5 },
+  12: { cols: 3, rows: 4 },
+  15: { cols: 3, rows: 5 },
+  18: { cols: 3, rows: 6 },
+};
+
 /**
- * Returns the front-face rect {x, y, w, h} (in mm) for a card slot (0..9).
+ * Returns grid configuration for a given cards-per-sheet option.
+ *
+ * @param {number} [cardsPerSheet=10] Cards per sheet
+ * @returns {{
+ *   cols: number,
+ *   rows: number,
+ *   cardsPerSheet: number,
+ *   marginLeft: number,
+ *   marginTop: number,
+ *   width: number,
+ *   height: number,
+ *   cardWidth: number,
+ *   cardHeight: number
+ * }}
+ */
+export function gridFor(cardsPerSheet = DEFAULT_CARDS_PER_SHEET) {
+  if (typeof cardsPerSheet !== 'number' || !CARDS_PER_SHEET_OPTIONS.includes(cardsPerSheet)) {
+    throw new RangeError(
+      `Unsupported cards per sheet: ${cardsPerSheet}. Allowed options: ${CARDS_PER_SHEET_OPTIONS.join(', ')}.`
+    );
+  }
+  const config = GRID_CONFIGS[cardsPerSheet];
+  const { cols, rows } = config;
+  const marginLeft = 14;
+  const marginTop = 11;
+  const width = 182;
+  const height = 275;
+  const cardWidth = width / cols;
+  const cardHeight = height / rows;
+
+  return {
+    cols,
+    rows,
+    cardsPerSheet,
+    marginLeft,
+    marginTop,
+    width,
+    height,
+    cardWidth,
+    cardHeight,
+  };
+}
+
+/**
+ * Returns the front-face rect {x, y, w, h} (in mm) for a card slot.
  * Origin is the top-left of the page, y downward.
  *
- * @param {number} slot Slot index 0..9 on a sheet
+ * @param {number} slot Slot index on a sheet (0..cardsPerSheet - 1)
+ * @param {number} [cardsPerSheet=10] Number of cards per sheet
  * @returns {{ x: number, y: number, w: number, h: number }}
  */
-export function frontRect(slot) {
-  if (slot < 0 || slot >= GRID.cardsPerSheet) {
-    throw new RangeError(`Invalid slot index: ${slot}. Must be 0..9.`);
+export function frontRect(slot, cardsPerSheet = DEFAULT_CARDS_PER_SHEET) {
+  const grid = gridFor(cardsPerSheet);
+  if (typeof slot !== 'number' || slot < 0 || slot >= grid.cardsPerSheet || !Number.isInteger(slot)) {
+    throw new RangeError(`Invalid slot index: ${slot}. Must be 0..${grid.cardsPerSheet - 1}.`);
   }
-  const col = slot % GRID.cols;
-  const row = Math.floor(slot / GRID.cols);
+  const col = slot % grid.cols;
+  const row = Math.floor(slot / grid.cols);
   return {
-    x: GRID.marginLeft + col * CARD.width,
-    y: GRID.marginTop + row * CARD.height,
-    w: CARD.width,
-    h: CARD.height,
+    x: grid.marginLeft + col * grid.cardWidth,
+    y: grid.marginTop + row * grid.cardHeight,
+    w: grid.cardWidth,
+    h: grid.cardHeight,
   };
 }
 
@@ -97,17 +157,19 @@ export function mapToBack(rect, opts = {}) {
 }
 
 /**
- * Returns the back-face rect {x, y, w, h} (in mm) for a card slot (0..9).
+ * Returns the back-face rect {x, y, w, h} (in mm) for a card slot.
  *
- * @param {number} slot Slot index 0..9 on a sheet
+ * @param {number} slot Slot index on a sheet
  * @param {object} [opts]
  * @param {'long'|'short'} [opts.flip='long'] Long-edge or short-edge binding
  * @param {number} [opts.backOffsetX=0] User calibration offset X in mm
  * @param {number} [opts.backOffsetY=0] User calibration offset Y in mm
+ * @param {number} [opts.cardsPerSheet=10] Cards per sheet
  * @returns {{ x: number, y: number, w: number, h: number }}
  */
 export function backRect(slot, opts = {}) {
-  const front = frontRect(slot);
+  const cardsPerSheet = opts.cardsPerSheet ?? DEFAULT_CARDS_PER_SHEET;
+  const front = frontRect(slot, cardsPerSheet);
   return mapToBack(front, opts);
 }
 
@@ -115,14 +177,16 @@ export function backRect(slot, opts = {}) {
  * Paginates n cards into sheets and slots.
  *
  * @param {number} n Total number of cards
+ * @param {number} [cardsPerSheet=10] Cards per sheet
  * @returns {Array<{ sheet: number, slot: number, index: number }>}
  */
-export function paginate(n) {
+export function paginate(n, cardsPerSheet = DEFAULT_CARDS_PER_SHEET) {
+  const grid = gridFor(cardsPerSheet);
   const result = [];
   for (let i = 0; i < n; i++) {
     result.push({
-      sheet: Math.floor(i / GRID.cardsPerSheet),
-      slot: i % GRID.cardsPerSheet,
+      sheet: Math.floor(i / grid.cardsPerSheet),
+      slot: i % grid.cardsPerSheet,
       index: i,
     });
   }
@@ -134,25 +198,26 @@ export function paginate(n) {
  * Crop marks are drawn at every grid line, starting 1 mm outside the grid
  * and 5 mm long (clipped to the page).
  *
+ * @param {number} [cardsPerSheet=10] Cards per sheet
  * @returns {Array<{ x1: number, y1: number, x2: number, y2: number }>}
  */
-export function cropMarkLines() {
+export function cropMarkLines(cardsPerSheet = DEFAULT_CARDS_PER_SHEET) {
+  const grid = gridFor(cardsPerSheet);
   const lines = [];
 
   const clampX = (v) => Math.max(0, Math.min(PAGE.width, v));
   const clampY = (v) => Math.max(0, Math.min(PAGE.height, v));
 
-  // Vertical grid lines (x = 14, 105, 196)
-  const xGridLines = [
-    GRID.marginLeft,
-    GRID.marginLeft + CARD.width,
-    GRID.marginLeft + 2 * CARD.width,
-  ];
+  // Vertical grid lines
+  const xGridLines = [];
+  for (let col = 0; col <= grid.cols; col++) {
+    xGridLines.push(grid.marginLeft + col * grid.cardWidth);
+  }
 
-  // Horizontal grid lines (y = 11, 66, 121, 176, 231, 286)
+  // Horizontal grid lines
   const yGridLines = [];
-  for (let row = 0; row <= GRID.rows; row++) {
-    yGridLines.push(GRID.marginTop + row * CARD.height);
+  for (let row = 0; row <= grid.rows; row++) {
+    yGridLines.push(grid.marginTop + row * grid.cardHeight);
   }
 
   // Vertical marks in top & bottom margins
@@ -160,12 +225,12 @@ export function cropMarkLines() {
     // Top margin: starts 1 mm above grid (y = 10), 5 mm long upwards (to y = 5)
     lines.push({
       x1: clampX(x),
-      y1: clampY(GRID.marginTop - 1),
+      y1: clampY(grid.marginTop - 1),
       x2: clampX(x),
-      y2: clampY(GRID.marginTop - 1 - 5),
+      y2: clampY(grid.marginTop - 1 - 5),
     });
     // Bottom margin: starts 1 mm below grid (y = 287), 5 mm long downwards (to y = 292)
-    const gridBottom = GRID.marginTop + GRID.height;
+    const gridBottom = grid.marginTop + grid.height;
     lines.push({
       x1: clampX(x),
       y1: clampY(gridBottom + 1),
@@ -178,13 +243,13 @@ export function cropMarkLines() {
   for (const y of yGridLines) {
     // Left margin: starts 1 mm left of grid (x = 13), 5 mm long leftwards (to x = 8)
     lines.push({
-      x1: clampX(GRID.marginLeft - 1),
+      x1: clampX(grid.marginLeft - 1),
       y1: clampY(y),
-      x2: clampX(GRID.marginLeft - 1 - 5),
+      x2: clampX(grid.marginLeft - 1 - 5),
       y2: clampY(y),
     });
     // Right margin: starts 1 mm right of grid (x = 197), 5 mm long rightwards (to x = 202)
-    const gridRight = GRID.marginLeft + GRID.width;
+    const gridRight = grid.marginLeft + grid.width;
     lines.push({
       x1: clampX(gridRight + 1),
       y1: clampY(y),
@@ -246,13 +311,14 @@ export function facePadding(side) {
 /**
  * Returns the punch-hole center coordinate {x, y} in page mm (front coordinates).
  *
- * @param {number} slot Slot index 0..9 on a sheet
+ * @param {number} slot Slot index on a sheet
+ * @param {number} [cardsPerSheet=10] Cards per sheet
  * @returns {{ x: number, y: number }}
  */
-export function holeCenter(slot) {
-  const rect = frontRect(slot);
+export function holeCenter(slot, cardsPerSheet = DEFAULT_CARDS_PER_SHEET) {
+  const rect = frontRect(slot, cardsPerSheet);
   return {
     x: rect.x + HOLE.centerFromEdge,
-    y: rect.y + CARD.height / 2,
+    y: rect.y + rect.h / 2,
   };
 }
