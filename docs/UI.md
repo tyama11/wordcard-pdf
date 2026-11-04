@@ -42,8 +42,7 @@ Directly under the header and above Step 1:
   - Failure Feedback: Shows an error message and automatically opens the details `<details id="ai-prompt-details">`.
 - **Details / Fallback**:
   - Collapsible `<details id="ai-prompt-details">` containing the text (依頼文) for manual selection and copying.
-- **Privacy Distinction**:
-  - Clarifies that photos are uploaded directly to the user's chosen third-party AI service; `wordcard-pdf` itself does not receive or send any photo or card data.
+- **Note**: `※ご利用のAIの利用規約を確認の上実行してください。`
 
 ---
 
@@ -85,7 +84,7 @@ Directly under the header and above Step 1:
     - `12枚（3列×4行・61×69mm）`
     - `15枚（3列×5行・61×55mm）`
     - `18枚（3列×6行・61×46mm）`
-  - Helper text: `枚数を変えるとカードの大きさも変わります。市販の10面名刺カード用紙に合うのは10枚だけです。`
+  - Helper text: `枚数を変えるとカードの大きさも変わります。市販の10面名刺カード用紙に合わせる場合は、10枚を選んでください。`
   - Behavior:
     - Minimum 4, maximum 18, default 10.
     - Only 10 fits commercial 10-up perforated business-card paper.
@@ -200,7 +199,6 @@ A collapsible section (`<details>`) providing a syntax reference table:
 ## 7. Footer
 
 - **GitHub Repository Link**: Link to `https://github.com/tyama11/wordcard-pdf` with GitHub icon/text.
-- **Version Number**: `v1.0.0` (from `package.json`).
 - **Copyright / License**: `MIT License © 2026 tyama11`
 
 ---

@@ -64,7 +64,7 @@ test.describe('Cards per sheet setting', () => {
 
     // Helper text
     await expect(help).toBeVisible();
-    await expect(help).toHaveText('枚数を変えるとカードの大きさも変わります。市販の10面名刺カード用紙に合うのは10枚だけです。');
+    await expect(help).toHaveText('枚数を変えるとカードの大きさも変わります。市販の10面名刺カード用紙に合わせる場合は、10枚を選んでください。');
 
     // Default value is 10
     await expect(select).toHaveValue(String(DEFAULT_CARDS_PER_SHEET));
