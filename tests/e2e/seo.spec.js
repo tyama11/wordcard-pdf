@@ -15,6 +15,7 @@ test.describe('検索エンジン向けの情報', () => {
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', SITE_URL);
     await expect(page.locator('meta[property="og:url"]')).toHaveAttribute('content', SITE_URL);
     await expect(page.locator('h1')).toHaveCount(1);
+    await expect(page.locator('meta[name="google-site-verification"]')).toHaveAttribute('content', /\S+/);
   });
 
   test('構造化データが正しいJSONで、公開URLを指している', async ({ page }) => {
