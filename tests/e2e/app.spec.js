@@ -35,7 +35,7 @@ test.describe('Wordcards PDF App E2E', () => {
     const download = await downloadPromise;
 
     const filename = download.suggestedFilename();
-    expect(filename).toMatch(/^wordcards-\d{8}-\d{4}\.pdf$/);
+    expect(filename).toBe('app.pdf');
 
     const downloadPath = await download.path();
     const pdfBytes = fs.readFileSync(downloadPath);

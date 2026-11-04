@@ -148,7 +148,7 @@ Directly under the header and above Step 1:
     - Text indicator: `◯ / ◯ 面を作成中` (e.g. `12 / 20 面を作成中`).
     - Disable button and inputs while running.
 - **Output File Download**:
-  - Downloads generated file named with timestamp: `wordcards-YYYYMMDD-HHmm.pdf` (e.g., `wordcards-20261026-1138.pdf`).
+  - Downloads the generated file with the loaded CSV's name and a `.pdf` extension (e.g., `english.csv` becomes `english.pdf`).
 - **Post-Generation Notice Box (`印刷時の注意`)**:
   - Displayed prominently after successful PDF creation:
     - **用紙サイズ**: `A4`

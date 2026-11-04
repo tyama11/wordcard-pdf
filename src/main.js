@@ -1,5 +1,5 @@
 import './style.css';
-import { decodeBytes, parseCards, hasHeaderRow } from './csv.js';
+import { decodeBytes, parseCards, hasHeaderRow, pdfFilenameFor } from './csv.js';
 import { renderFace, findTexErrors } from './tex.js';
 import { normalizeInput } from './texsplit.js';
 import { buildCardsPdf, buildCalibrationPdf } from './pdf.js';
@@ -10,20 +10,6 @@ import {
 } from './layout.js';
 import { drawCalibrationInstructions } from './calibration-text.js';
 import { readSettings, writeSettings, clampOffset } from './settings.js';
-
-/**
- * Format local timestamp as YYYYMMDD-HHmm.
- * @param {Date} date
- * @returns {string}
- */
-function formatLocalTimestamp(date = new Date()) {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  const hh = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  return `${yyyy}${mm}${dd}-${hh}${min}`;
-}
 
 /**
  * Downloads a Blob as a file in browser.
@@ -46,6 +32,7 @@ function triggerDownload(blob, filename) {
 // State
 let loadedCards = [];
 let hasDetectedHeader = false;
+let loadedFileName = '';
 let currentTexErrors = [];
 let isProceedingWithGeneration = false;
 
@@ -361,6 +348,7 @@ async function handleFile(file) {
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
     const text = decodeBytes(bytes);
+    loadedFileName = file.name;
     processCsvText(text);
   } catch (err) {
     console.error('File reading failed:', err);
@@ -544,8 +532,7 @@ async function generatePdf() {
       },
     });
 
-    const timestamp = formatLocalTimestamp();
-    const filename = `wordcards-${timestamp}.pdf`;
+    const filename = pdfFilenameFor(loadedFileName);
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     triggerDownload(blob, filename);
 

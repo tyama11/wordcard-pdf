@@ -56,7 +56,7 @@ test.describe('Hole punch options UI', () => {
       await proceedBtn.click();
     }
     const downloadOn = await downloadOnPromise;
-    expect(downloadOn.suggestedFilename()).toMatch(/^wordcards-\d{8}-\d{4}\.pdf$/);
+    expect(downloadOn.suggestedFilename()).toBe('app.pdf');
 
     const downloadOnPath = await downloadOn.path();
     const pdfOnBytes = fs.readFileSync(downloadOnPath);
@@ -76,7 +76,7 @@ test.describe('Hole punch options UI', () => {
       await proceedBtn.click();
     }
     const downloadOff = await downloadOffPromise;
-    expect(downloadOff.suggestedFilename()).toMatch(/^wordcards-\d{8}-\d{4}\.pdf$/);
+    expect(downloadOff.suggestedFilename()).toBe('app.pdf');
 
     const downloadOffPath = await downloadOff.path();
     const pdfOffBytes = fs.readFileSync(downloadOffPath);

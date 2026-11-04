@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { decodeBytes, parseCards, hasHeaderRow } from '../../src/csv.js';
+import { decodeBytes, parseCards, hasHeaderRow, pdfFilenameFor } from '../../src/csv.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -338,5 +338,21 @@ describe('parseCards', () => {
       expect(hasHeaderRow(undefined)).toBe(false);
       expect(hasHeaderRow('   \n\r\n   ')).toBe(false);
     });
+  });
+});
+
+describe('pdfFilenameFor', () => {
+  it.each([
+    ['english.csv', 'english.pdf'],
+    ['英単語 第1章.csv', '英単語 第1章.pdf'],
+    ['words.TSV', 'words.pdf'],
+    ['words.txt', 'words.pdf'],
+    ['a.b.csv', 'a.b.pdf'],
+    ['noextension', 'noextension.pdf'],
+    ['.csv', 'wordcards.pdf'],
+    ['', 'wordcards.pdf'],
+    [undefined, 'wordcards.pdf'],
+  ])('%s -> %s', (input, expected) => {
+    expect(pdfFilenameFor(input)).toBe(expected);
   });
 });
