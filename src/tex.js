@@ -297,7 +297,7 @@ export function explainTexError(message) {
  * Find TeX syntax errors in cell text.
  * Reuses the lazily created MathJax document.
  * @param {string} text
- * @returns {{source: string, message: string, ja: string, explanation: string}[]} Array of error details for each invalid math part
+ * @returns {{source: string, message: string, ja: string}[]} Array of error details for each invalid math part
  */
 export function findTexErrors(text) {
   const errors = [];
@@ -310,7 +310,6 @@ export function findTexErrors(text) {
         source: p.value,
         message: p.message,
         ja: explainTexError(p.message),
-        explanation: explainTexErrorLocalized(p.message),
       });
     } else if (p.type === 'inline' || p.type === 'display') {
       currentUndefinedCS = [];
@@ -322,7 +321,6 @@ export function findTexErrors(text) {
             source: p.value,
             message: msg,
             ja: explainTexError(msg),
-            explanation: explainTexErrorLocalized(msg),
           });
         }
       } catch (err) {
@@ -331,7 +329,6 @@ export function findTexErrors(text) {
           source: p.value,
           message: msg,
           ja: explainTexError(msg),
-          explanation: explainTexErrorLocalized(msg),
         });
       }
     }
@@ -470,7 +467,7 @@ export function buildFace(
     if (errors.length > 0) {
       note = document.createElement('div');
       note.className = 'wordcard-error-note';
-      const firstExp = errors[0].explanation;
+      const firstExp = explainTexErrorLocalized(errors[0].message);
       const more = errors.length > 1 ? t('tex.moreErrors', { count: errors.length - 1 }) : '';
       note.textContent = t('tex.errorNote', { error: firstExp, more });
       Object.assign(note.style, {

@@ -306,7 +306,7 @@ function setAlerts(alerts) {
  * Validate TeX expressions across all loaded cards.
  * @param {Array<{front: string, back: string}>} cards
  * @param {boolean} hasHeader
- * @returns {Array<{row: number, sideKey: string, side: string, source: string, message: string, ja: string, explanation: string}>}
+ * @returns {Array<{row: number, sideKey: string, side: string, source: string, message: string, ja: string}>}
  */
 function validateCardsTex(cards, hasHeader) {
   const entries = [];
@@ -326,7 +326,6 @@ function validateCardsTex(cards, hasHeader) {
         source: err.source,
         message: err.message,
         ja: err.ja,
-        explanation: err.explanation,
       });
     }
 
@@ -340,7 +339,6 @@ function validateCardsTex(cards, hasHeader) {
         source: err.source,
         message: err.message,
         ja: err.ja,
-        explanation: err.explanation,
       });
     }
   }
