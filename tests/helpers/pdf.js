@@ -20,9 +20,9 @@ export const STANDARD_FONTS_DIR = path.resolve('node_modules/pdfjs-dist/standard
  * @returns {Promise<import('pdfjs-dist').PDFDocumentProxy>}
  */
 export async function loadPdf(pdfData) {
-  const data = pdfData instanceof Uint8Array ? pdfData : new Uint8Array(pdfData);
   return pdfjsLib.getDocument({
-    data,
+    // pdfjsはBufferを受け付けない（BufferはUint8Arrayの一種なのでinstanceofでは区別できない）
+    data: new Uint8Array(pdfData),
     standardFontDataUrl: STANDARD_FONTS_DIR,
   }).promise;
 }
