@@ -4,8 +4,14 @@ import { decodeBytes, parseCards } from './csv.js';
 import { renderFace, findTexErrors } from './tex.js';
 import { normalizeInput } from './texsplit.js';
 import { buildCardsPdf, buildCalibrationPdf } from './pdf.js';
+import {
+  CARDS_PER_SHEET_OPTIONS,
+  DEFAULT_CARDS_PER_SHEET,
+  gridFor,
+} from './layout.js';
 
 const STORAGE_KEYS = {
+  cardsPerSheet: 'wordcard_cardsPerSheet',
   flip: 'wordcard_flip',
   backOffsetX: 'wordcard_backOffsetX',
   backOffsetY: 'wordcard_backOffsetY',
@@ -183,6 +189,7 @@ const confirmDialogList = document.getElementById('confirm-dialog-list');
 const dialogCancelBtn = document.getElementById('dialog-cancel-btn');
 const dialogProceedBtn = document.getElementById('dialog-proceed-btn');
 
+const cardsPerSheetSelect = document.getElementById('cards-per-sheet');
 const flipSelect = document.getElementById('flip-select');
 const offsetXInput = document.getElementById('offset-x');
 const offsetYInput = document.getElementById('offset-y');
@@ -199,6 +206,49 @@ const printNotice = document.getElementById('print-notice');
 const duplexNoticeText = document.getElementById('duplex-notice-text');
 
 /**
+ * Populates the cards-per-sheet select element using CARDS_PER_SHEET_OPTIONS and gridFor.
+ */
+function initCardsPerSheetSelect() {
+  if (!cardsPerSheetSelect) return;
+  cardsPerSheetSelect.innerHTML = '';
+  for (const n of CARDS_PER_SHEET_OPTIONS) {
+    const grid = gridFor(n);
+    const opt = document.createElement('option');
+    opt.value = String(n);
+    const w = Math.round(grid.cardWidth);
+    const h = Math.round(grid.cardHeight);
+    opt.textContent = `${n}枚（${grid.cols}列×${grid.rows}行・${w}×${h}mm）`;
+    if (n === DEFAULT_CARDS_PER_SHEET) {
+      opt.selected = true;
+    }
+    cardsPerSheetSelect.appendChild(opt);
+  }
+}
+
+/**
+ * Returns currently selected cards-per-sheet count, falling back to DEFAULT_CARDS_PER_SHEET.
+ * @returns {number}
+ */
+function getSelectedCardsPerSheet() {
+  const val = parseInt(cardsPerSheetSelect?.value, 10);
+  return CARDS_PER_SHEET_OPTIONS.includes(val) ? val : DEFAULT_CARDS_PER_SHEET;
+}
+
+/**
+ * Updates card summary text based on loaded cards and current cardsPerSheet.
+ */
+function updateSummary() {
+  if (loadedCards.length === 0) {
+    summaryContainer.hidden = true;
+    return;
+  }
+  const perSheet = getSelectedCardsPerSheet();
+  const sheetCount = Math.ceil(loadedCards.length / perSheet);
+  cardSummary.textContent = `${loadedCards.length}枚のカード（A4 ${sheetCount}枚・両面）`;
+  summaryContainer.hidden = false;
+}
+
+/**
  * Updates disabled state of the hole guide select according to hole checkbox.
  */
 function updateHoleGuideState() {
@@ -212,6 +262,14 @@ function updateHoleGuideState() {
  */
 function loadSettings() {
   try {
+    const savedCardsPerSheet = localStorage.getItem(STORAGE_KEYS.cardsPerSheet);
+    const parsedCardsPerSheet = parseInt(savedCardsPerSheet, 10);
+    if (CARDS_PER_SHEET_OPTIONS.includes(parsedCardsPerSheet)) {
+      cardsPerSheetSelect.value = String(parsedCardsPerSheet);
+    } else {
+      cardsPerSheetSelect.value = String(DEFAULT_CARDS_PER_SHEET);
+    }
+
     const savedFlip = localStorage.getItem(STORAGE_KEYS.flip);
     if (savedFlip === 'long' || savedFlip === 'short') {
       flipSelect.value = savedFlip;
@@ -255,6 +313,7 @@ function loadSettings() {
  */
 function saveSettings() {
   try {
+    localStorage.setItem(STORAGE_KEYS.cardsPerSheet, cardsPerSheetSelect.value);
     localStorage.setItem(STORAGE_KEYS.flip, flipSelect.value);
     localStorage.setItem(STORAGE_KEYS.backOffsetX, offsetXInput.value);
     localStorage.setItem(STORAGE_KEYS.backOffsetY, offsetYInput.value);
@@ -413,9 +472,7 @@ function processCsvText(rawText) {
   generateBtn.disabled = false;
 
   // Summary display per UI.md: ◯枚のカード（A4 ◯枚・両面）
-  const sheetCount = Math.ceil(cards.length / 10);
-  cardSummary.textContent = `${cards.length}枚のカード（A4 ${sheetCount}枚・両面）`;
-  summaryContainer.hidden = false;
+  updateSummary();
 
   // Large CSV warning (> 1000 cards)
   if (cards.length > 1000) {
@@ -491,6 +548,10 @@ dropZone.addEventListener('keydown', (e) => {
 });
 
 // Settings change
+cardsPerSheetSelect.addEventListener('change', () => {
+  saveSettings();
+  updateSummary();
+});
 flipSelect.addEventListener('change', saveSettings);
 cropMarksCheckbox.addEventListener('change', saveSettings);
 holeCheckbox.addEventListener('change', () => {
@@ -573,8 +634,10 @@ async function generatePdf() {
   const cropMarks = cropMarksCheckbox.checked;
   const hole = holeCheckbox.checked;
   const holeGuide = holeGuideSelect.value;
+  const cardsPerSheet = getSelectedCardsPerSheet();
 
   generateBtn.disabled = true;
+  cardsPerSheetSelect.disabled = true;
   flipSelect.disabled = true;
   offsetXInput.disabled = true;
   offsetYInput.disabled = true;
@@ -603,6 +666,7 @@ async function generatePdf() {
       cropMarks,
       hole,
       holeGuide,
+      cardsPerSheet,
       onProgress: (done, total) => {
         progressBar.max = total;
         progressBar.value = done;
@@ -621,6 +685,7 @@ async function generatePdf() {
     renderAlerts({ error: 'PDFの作成中にエラーが発生しました。' });
   } finally {
     generateBtn.disabled = false;
+    cardsPerSheetSelect.disabled = false;
     flipSelect.disabled = false;
     offsetXInput.disabled = false;
     offsetYInput.disabled = false;
@@ -663,4 +728,5 @@ confirmDialog.addEventListener('close', () => {
 });
 
 // Initialize settings
+initCardsPerSheetSelect();
 loadSettings();
