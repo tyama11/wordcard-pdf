@@ -1,5 +1,7 @@
+import { t } from './i18n.js';
+
 /**
- * Renders Japanese instruction text for the calibration PDF sheet.
+ * Renders instruction text for the calibration PDF sheet.
  * @param {import('jspdf').jsPDF} doc
  * @param {number} pageNumber
  * @param {'long'|'short'} flip
@@ -25,40 +27,61 @@ export function drawCalibrationInstructions(doc, pageNumber, flip) {
   ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
 
   ctx.fillStyle = '#0f172a';
-  const fontFam = '"Hiragino Sans","Noto Sans JP","Yu Gothic","Meiryo",sans-serif';
+  const fontFam = '"Hiragino Sans","Noto Sans JP","Yu Gothic","Meiryo","PingFang SC","PingFang TC","Microsoft YaHei","Microsoft JhengHei",sans-serif';
+  const maxTextWidth = canvas.width - Math.round(16 * mmToPx);
+
+  const drawFittedText = (text, x, y, baseSizePx, isBold = false) => {
+    let size = baseSizePx;
+    ctx.font = `${isBold ? 'bold ' : 'normal '}${size}px ${fontFam}`;
+    const measured = ctx.measureText(text).width;
+    if (measured > maxTextWidth) {
+      size = baseSizePx * (maxTextWidth / measured);
+      ctx.font = `${isBold ? 'bold ' : 'normal '}${size}px ${fontFam}`;
+    }
+    ctx.fillText(text, x, y);
+  };
 
   if (pageNumber === 1) {
-    // Front page text: how to print (A4, 両面, 長辺/短辺 as selected, 実際のサイズ/100%)
-    ctx.font = `bold ${Math.round(4.0 * mmToPx)}px ${fontFam}`;
-    ctx.fillText('【位置合わせシートの印刷手順】', Math.round(8 * mmToPx), Math.round(12 * mmToPx));
+    // Front page text: how to print (A4, duplex, long/short as selected, actual size/100%)
+    drawFittedText(
+      t('calibration.frontTitle'),
+      Math.round(8 * mmToPx),
+      Math.round(12 * mmToPx),
+      Math.round(4.0 * mmToPx),
+      true
+    );
 
-    ctx.font = `normal ${Math.round(3.3 * mmToPx)}px ${fontFam}`;
+    const flipText = flip === 'short' ? t('calibration.flipShort') : t('calibration.flipLong');
     const lines = [
-      '・用紙サイズ: A4（タテ）',
-      `・両面印刷: 必ず両面印刷にし、「${flip === 'short' ? '短辺とじ' : '長辺とじ'}」を選択`,
-      '・印刷倍率: 「実際のサイズ」または「100%」（「用紙に合わせる」は必ずOFF）',
-      '・フチなし印刷: 必ずOFF（拡大されて位置がずれます）',
+      t('calibration.frontLine1'),
+      t('calibration.frontLine2', { flip: flipText }),
+      t('calibration.frontLine3'),
+      t('calibration.frontLine4'),
     ];
     let y = Math.round(20 * mmToPx);
     for (const line of lines) {
-      ctx.fillText(line, Math.round(8 * mmToPx), y);
+      drawFittedText(line, Math.round(8 * mmToPx), y, Math.round(3.3 * mmToPx), false);
       y += Math.round(7.2 * mmToPx);
     }
   } else {
-    // Back page text: how to read (光に透かす, 表の十字が裏の目盛りのどこに見えるか読む, その値を現在の補正値に足す, +X=右 +Y=下（裏面を見て）)
-    ctx.font = `bold ${Math.round(4.0 * mmToPx)}px ${fontFam}`;
-    ctx.fillText('【位置合わせ（ズレ補正）の手順】', Math.round(8 * mmToPx), Math.round(12 * mmToPx));
+    // Back page text: how to read calibration marks
+    drawFittedText(
+      t('calibration.backTitle'),
+      Math.round(8 * mmToPx),
+      Math.round(12 * mmToPx),
+      Math.round(4.0 * mmToPx),
+      true
+    );
 
-    ctx.font = `normal ${Math.round(3.1 * mmToPx)}px ${fontFam}`;
     const lines = [
-      '1. 印刷後、この裏面を手前にして明るい光に透かします。',
-      '2. 表面の十字線が、裏面の目盛り（+X/+Y）のどこに見えるかを読み取ります。',
-      '3. 読み取った数値を、画面の現在の補正値（裏面オフセット）に足してください。',
-      '   ・裏面を見て: +X は右へ、-X は左へ / +Y は下へ、-Y は上へ補正',
+      t('calibration.backLine1'),
+      t('calibration.backLine2'),
+      t('calibration.backLine3'),
+      t('calibration.backLine4'),
     ];
     let y = Math.round(19.5 * mmToPx);
     for (const line of lines) {
-      ctx.fillText(line, Math.round(8 * mmToPx), y);
+      drawFittedText(line, Math.round(8 * mmToPx), y, Math.round(3.1 * mmToPx), false);
       y += Math.round(6.8 * mmToPx);
     }
   }

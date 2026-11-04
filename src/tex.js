@@ -32,6 +32,7 @@ import '@mathjax/mathjax-newcm-font/js/svg/dynamic/variants.js';
 import html2canvas from 'html2canvas-pro';
 import { splitTex } from './texsplit.js';
 import { CARD, facePadding } from './layout.js';
+import { t } from './i18n.js';
 
 export { splitTex };
 
@@ -183,6 +184,66 @@ function getMathJax() {
 }
 
 /**
+ * Looks up the i18n translation key and params for a TeX error message.
+ * @param {string} message English error message
+ * @returns {{ key: string, params?: Record<string, any> }}
+ */
+export function getTexErrorKeyAndParams(message) {
+  const msg = String(message ?? '').trim();
+
+  // Missing argument for \X
+  const missingArg = /^Missing argument for (\\\S+|\S+?)(?:\.|$)/.exec(msg);
+  if (missingArg) {
+    return { key: 'tex.error.missingArg', params: { cmd: missingArg[1] } };
+  }
+
+  // Missing close brace
+  if (/^Missing close brace(?:\.|$)/.test(msg)) {
+    return { key: 'tex.error.missingCloseBrace' };
+  }
+
+  // Extra close brace / Extra open brace or missing close brace
+  if (/^Extra (?:close brace|open brace or missing close brace)(?:\.|$)/.test(msg)) {
+    return { key: 'tex.error.unbalancedBraces' };
+  }
+
+  // Undefined control sequence \X
+  const undef = /^Undefined control sequence (\\\S+|\S+?)(?:\.|$)/.exec(msg);
+  if (undef) {
+    return { key: 'tex.error.undefinedCommand', params: { cmd: undef[1] } };
+  }
+
+  // Unclosed math delimiter $ (also $$ \( \[)
+  const unclosed = /^Unclosed math delimiter (\$\$|\$|\\\(|\\\[)/.exec(msg);
+  if (unclosed) {
+    const delim = unclosed[1];
+    let open = delim;
+    let close = delim;
+    if (delim === '\\(') close = '\\)';
+    else if (delim === '\\[') close = '\\]';
+    return { key: 'tex.error.unclosedDelimiter', params: { delim, open, close } };
+  }
+
+  // Double exponent / Double subscript
+  if (/^Double (?:exponent|subscript)/.test(msg)) {
+    return { key: 'tex.error.doubleScript' };
+  }
+
+  // Fallback
+  return { key: 'tex.error.unknown', params: { msg } };
+}
+
+/**
+ * Returns localized explanation for a TeX error message.
+ * @param {string} message English error message
+ * @returns {string} Localized explanation
+ */
+export function explainTexErrorLocalized(message) {
+  const { key, params } = getTexErrorKeyAndParams(message);
+  return t(key, params);
+}
+
+/**
  * Translate a TeX error message to Japanese for user guidance.
  * @param {string} message English error message
  * @returns {string} Japanese explanation
@@ -236,7 +297,7 @@ export function explainTexError(message) {
  * Find TeX syntax errors in cell text.
  * Reuses the lazily created MathJax document.
  * @param {string} text
- * @returns {{source: string, message: string, ja: string}[]} Array of error details for each invalid math part
+ * @returns {{source: string, message: string, ja: string, explanation: string}[]} Array of error details for each invalid math part
  */
 export function findTexErrors(text) {
   const errors = [];
@@ -249,6 +310,7 @@ export function findTexErrors(text) {
         source: p.value,
         message: p.message,
         ja: explainTexError(p.message),
+        explanation: explainTexErrorLocalized(p.message),
       });
     } else if (p.type === 'inline' || p.type === 'display') {
       currentUndefinedCS = [];
@@ -260,6 +322,7 @@ export function findTexErrors(text) {
             source: p.value,
             message: msg,
             ja: explainTexError(msg),
+            explanation: explainTexErrorLocalized(msg),
           });
         }
       } catch (err) {
@@ -268,6 +331,7 @@ export function findTexErrors(text) {
           source: p.value,
           message: msg,
           ja: explainTexError(msg),
+          explanation: explainTexErrorLocalized(msg),
         });
       }
     }
@@ -406,9 +470,9 @@ export function buildFace(
     if (errors.length > 0) {
       note = document.createElement('div');
       note.className = 'wordcard-error-note';
-      const firstJa = errors[0].ja;
-      const more = errors.length > 1 ? ` ほか${errors.length - 1}件` : '';
-      note.textContent = `⚠ 数式エラー：${firstJa}${more}`;
+      const firstExp = errors[0].explanation;
+      const more = errors.length > 1 ? t('tex.moreErrors', { count: errors.length - 1 }) : '';
+      note.textContent = t('tex.errorNote', { error: firstExp, more });
       Object.assign(note.style, {
         flex: 'none',
         width: '100%',

@@ -1,3 +1,5 @@
+import { t, onLocaleChange } from './i18n.js';
+
 export const AI_CSV_PROMPT = `添付した写真から単語カードのデータを読み取り、次の形式のCSVをコードブロックで出力してください。
 - 1行目は「表,裏」というヘッダーにする
 - 1行に1枚とし、1列目を表面（単語・問題）、2列目を裏面（意味・答え）にする
@@ -14,7 +16,7 @@ export function handleCopy() {
 
   const showFailure = () => {
     if (status) {
-      status.textContent = 'コピーできませんでした。下の依頼文を選択してコピーしてください';
+      status.textContent = t('ai.copyFailed');
     }
     if (details) {
       details.open = true;
@@ -26,7 +28,7 @@ export function handleCopy() {
     return;
   }
 
-  navigator.clipboard.writeText(AI_CSV_PROMPT).then(
+  navigator.clipboard.writeText(t('ai.prompt')).then(
     () => {
       if (status) {
         status.textContent = '';
@@ -35,9 +37,9 @@ export function handleCopy() {
         if (revertTimer) {
           clearTimeout(revertTimer);
         }
-        button.textContent = 'コピーしました';
+        button.textContent = t('ai.copied');
         revertTimer = setTimeout(() => {
-          button.textContent = '依頼文をコピー';
+          button.textContent = t('ai.copy');
           revertTimer = null;
         }, 2000);
       }
@@ -48,16 +50,29 @@ export function handleCopy() {
   );
 }
 
-export function initAiGuide() {
+export function renderAiGuide() {
   const pre = document.getElementById('ai-prompt-text');
   if (pre) {
-    pre.textContent = AI_CSV_PROMPT;
+    pre.textContent = t('ai.prompt');
   }
+
+  const button = document.getElementById('ai-prompt-copy');
+  if (button && !revertTimer) {
+    button.textContent = t('ai.copy');
+  }
+}
+
+export function initAiGuide() {
+  renderAiGuide();
 
   const button = document.getElementById('ai-prompt-copy');
   if (button) {
     button.addEventListener('click', handleCopy);
   }
+
+  onLocaleChange(() => {
+    renderAiGuide();
+  });
 }
 
 if (typeof document !== 'undefined') {

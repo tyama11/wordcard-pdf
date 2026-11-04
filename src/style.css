@@ -113,11 +113,41 @@ body {
   margin-bottom: 24px;
 }
 
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
 .app-title {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 1.75rem;
   font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+#locale-select {
+  width: auto;
+  max-width: 140px;
+  min-height: 36px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 6px;
+  background-color: var(--card-bg);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+#locale-select:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .app-description {
