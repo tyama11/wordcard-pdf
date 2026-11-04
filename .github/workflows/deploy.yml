@@ -14,12 +14,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # PRのCIを通って自動マージされた変更はworkflow_dispatchで届くので、再テストしない。
+  # mainへの手動マージや直接pushのときだけテストする。
   test:
+    if: github.event_name == 'push'
+    # 呼び出し先のmergeジョブ（pushでは実行されない）が宣言する権限の上限を満たすために必要
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
     uses: ./.github/workflows/ci.yml
 
   deploy:
     name: GitHub Pagesへ公開
     needs: test
+    if: ${{ !cancelled() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

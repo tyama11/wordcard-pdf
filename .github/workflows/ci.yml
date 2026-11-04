@@ -2,9 +2,7 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches-ignore:
-      - main
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_call:
 
 permissions:
@@ -68,3 +66,33 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  # テストが通ったPRをmainへマージして公開する。
+  # GITHUB_TOKENによるマージではpushイベントが発生しないため、公開は明示的に起動する。
+  # フォーク、下書き、Dependabotの更新は対象外（手動でマージする）。
+  merge:
+    name: mainへマージして公開
+    needs: [unit, e2e]
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == 'main' &&
+      !github.event.pull_request.draft &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+    steps:
+      - name: PRをマージ
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --merge --match-head-commit "$HEAD_SHA"
+      - name: 公開を起動
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main
